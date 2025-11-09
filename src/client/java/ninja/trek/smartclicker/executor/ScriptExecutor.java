@@ -301,11 +301,13 @@ public class ScriptExecutor {
                     int durabilityThreshold = Integer.parseInt(instruction.getParameter());
                     Inventory inventory = player.getInventory();
 
-                    // Get current hotbar slot
-                    int currentSlot = inventorySelectedField != null
-                        ? (int) inventorySelectedField.get(inventory)
-                        : inventory.selected;
+                    // Get current hotbar slot using reflection
+                    if (inventorySelectedField == null) {
+                        LOGGER.error("Cannot swap tool: inventory reflection not initialized");
+                        break;
+                    }
 
+                    int currentSlot = (int) inventorySelectedField.get(inventory);
                     ItemStack currentItem = inventory.getItem(currentSlot);
 
                     // Only proceed if there's an item and it's damageable
