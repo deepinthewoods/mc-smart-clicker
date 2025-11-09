@@ -106,11 +106,10 @@ public class ScriptExecutor {
             holding = false;
         }
 
-        // Check if script is complete
+        // Loop back to beginning when reaching the end
         List<CommandInstruction> instructions = currentScript.getInstructions();
         if (currentInstructionIndex >= instructions.size()) {
-            stop();
-            return;
+            currentInstructionIndex = 0;
         }
 
         // Execute current instruction
