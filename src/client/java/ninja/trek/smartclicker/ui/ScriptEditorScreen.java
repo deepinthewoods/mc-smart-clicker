@@ -88,6 +88,14 @@ public class ScriptEditorScreen extends Screen {
             CommandInstruction instruction = script.getInstructions().get(i);
             CommandRow row = new CommandRow(instruction, i, y);
             commandRows.add(row);
+            // Add all buttons to the screen
+            this.addRenderableWidget(row.removeButton);
+            this.addRenderableWidget(row.upButton);
+            this.addRenderableWidget(row.downButton);
+            this.addRenderableWidget(row.addButton);
+            this.addRenderableWidget(row.paramField);
+            this.addRenderableWidget(row.delayDecButton);
+            this.addRenderableWidget(row.delayIncButton);
             y += ROW_HEIGHT;
         }
     }
@@ -109,21 +117,10 @@ public class ScriptEditorScreen extends Screen {
         graphics.drawString(this.font, "Commands:", COMMAND_BUTTONS_X, 55, 0xFFFFFF);
         graphics.drawString(this.font, "Available:", this.width - 120, 55, 0xFFFFFF);
 
-        // Draw command rows
+        // Draw command rows (just the command names and delay controls)
         for (CommandRow row : commandRows) {
             row.render(graphics, mouseX, mouseY);
         }
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Check if any command row was clicked
-        for (CommandRow row : commandRows) {
-            if (row.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -138,11 +135,13 @@ public class ScriptEditorScreen extends Screen {
         private final CommandInstruction instruction;
         private final int index;
         private final int y;
-        private final Button removeButton;
-        private final Button upButton;
-        private final Button downButton;
-        private final Button addButton;
-        private final EditBox paramField;
+        public final Button removeButton;
+        public final Button upButton;
+        public final Button downButton;
+        public final Button addButton;
+        public final Button delayDecButton;
+        public final Button delayIncButton;
+        public final EditBox paramField;
         private int delayValue;
 
         public CommandRow(CommandInstruction instruction, int index, int y) {
@@ -196,9 +195,24 @@ public class ScriptEditorScreen extends Screen {
             }
             x += 82;
 
-            // Delay slider representation (we'll use +/- buttons for simplicity)
-            // Show current delay value and +/- buttons
-            x += 5;
+            // Delay controls
+            int delayX = COMMAND_BUTTONS_X + 312;
+
+            // Delay decrease button
+            this.delayDecButton = Button.builder(Component.literal("-"), button -> {
+                if (instruction.getPostDelay() > 1) {
+                    instruction.setPostDelay(instruction.getPostDelay() - 1);
+                    SmartClickerClient.getScriptManager().saveScript(script);
+                }
+            }).bounds(delayX, y, 15, 20).build();
+
+            // Delay increase button
+            this.delayIncButton = Button.builder(Component.literal("+"), button -> {
+                if (instruction.getPostDelay() < 50) {
+                    instruction.setPostDelay(instruction.getPostDelay() + 1);
+                    SmartClickerClient.getScriptManager().saveScript(script);
+                }
+            }).bounds(delayX + 17, y, 15, 20).build();
 
             // Add button [+]
             this.addButton = Button.builder(Component.literal("+"), button -> {
@@ -210,68 +224,14 @@ public class ScriptEditorScreen extends Screen {
         }
 
         public void render(GuiGraphics graphics, int mouseX, int mouseY) {
-            removeButton.render(graphics, mouseX, mouseY, 0);
-            upButton.render(graphics, mouseX, mouseY, 0);
-            downButton.render(graphics, mouseX, mouseY, 0);
-
             // Draw command type name
             graphics.drawString(font, instruction.getType().getDisplayName(),
                 COMMAND_BUTTONS_X + 68, y + 6, 0xFFFFFF);
 
-            // Draw parameter field
-            paramField.render(graphics, mouseX, mouseY, 0);
-
-            // Draw delay value and controls
+            // Draw delay value
             int delayX = COMMAND_BUTTONS_X + 252;
             graphics.drawString(font, "Delay: " + instruction.getPostDelay() + "t",
                 delayX, y + 6, 0xFFFFFF);
-
-            // Delay decrease button
-            if (mouseX >= delayX + 60 && mouseX <= delayX + 75 &&
-                mouseY >= y && mouseY <= y + 20) {
-                graphics.fill(delayX + 60, y, delayX + 75, y + 20, 0x80FFFFFF);
-            }
-            graphics.drawString(font, "-", delayX + 65, y + 6, 0xFFFFFF);
-
-            // Delay increase button
-            if (mouseX >= delayX + 77 && mouseX <= delayX + 92 &&
-                mouseY >= y && mouseY <= y + 20) {
-                graphics.fill(delayX + 77, y, delayX + 92, y + 20, 0x80FFFFFF);
-            }
-            graphics.drawString(font, "+", delayX + 82, y + 6, 0xFFFFFF);
-
-            addButton.render(graphics, mouseX, mouseY, 0);
-        }
-
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (removeButton.mouseClicked(mouseX, mouseY, button)) return true;
-            if (upButton.mouseClicked(mouseX, mouseY, button)) return true;
-            if (downButton.mouseClicked(mouseX, mouseY, button)) return true;
-            if (addButton.mouseClicked(mouseX, mouseY, button)) return true;
-            if (paramField.mouseClicked(mouseX, mouseY, button)) return true;
-
-            // Check delay buttons
-            int delayX = COMMAND_BUTTONS_X + 252;
-            if (mouseX >= delayX + 60 && mouseX <= delayX + 75 &&
-                mouseY >= y && mouseY <= y + 20) {
-                // Decrease delay
-                if (instruction.getPostDelay() > 1) {
-                    instruction.setPostDelay(instruction.getPostDelay() - 1);
-                    SmartClickerClient.getScriptManager().saveScript(script);
-                }
-                return true;
-            }
-            if (mouseX >= delayX + 77 && mouseX <= delayX + 92 &&
-                mouseY >= y && mouseY <= y + 20) {
-                // Increase delay
-                if (instruction.getPostDelay() < 50) {
-                    instruction.setPostDelay(instruction.getPostDelay() + 1);
-                    SmartClickerClient.getScriptManager().saveScript(script);
-                }
-                return true;
-            }
-
-            return false;
         }
     }
 }

@@ -36,7 +36,7 @@ public class SmartClickerClient implements ClientModInitializer {
 			"key.smart-clicker.menu",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_M,
-			"category.smart-clicker"
+			KeyMapping.Category.MISC
 		));
 
 		// Register tick event for script execution

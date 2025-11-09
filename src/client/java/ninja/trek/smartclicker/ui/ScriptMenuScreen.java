@@ -48,6 +48,9 @@ public class ScriptMenuScreen extends Screen {
         for (Script script : scripts) {
             ScriptRow row = new ScriptRow(script, y);
             scriptRows.add(row);
+            // Add buttons to the screen
+            this.addRenderableWidget(row.runButton);
+            this.addRenderableWidget(row.editButton);
             y += ROW_HEIGHT;
         }
 
@@ -67,22 +70,6 @@ public class ScriptMenuScreen extends Screen {
 
         // Draw title
         graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
-
-        // Draw script rows
-        for (ScriptRow row : scriptRows) {
-            row.render(graphics, mouseX, mouseY);
-        }
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Check if any script row was clicked
-        for (ScriptRow row : scriptRows) {
-            if (row.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -95,8 +82,8 @@ public class ScriptMenuScreen extends Screen {
     private class ScriptRow {
         private final Script script;
         private final int y;
-        private final Button runButton;
-        private final Button editButton;
+        public final Button runButton;
+        public final Button editButton;
 
         public ScriptRow(Script script, int y) {
             this.script = script;
@@ -117,21 +104,6 @@ public class ScriptMenuScreen extends Screen {
                     minecraft.setScreen(new ScriptEditorScreen(ScriptMenuScreen.this, script));
                 }
             }).bounds(centerX + 105, y, 45, BUTTON_HEIGHT).build();
-        }
-
-        public void render(GuiGraphics graphics, int mouseX, int mouseY) {
-            runButton.render(graphics, mouseX, mouseY, 0);
-            editButton.render(graphics, mouseX, mouseY, 0);
-        }
-
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (runButton.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-            if (editButton.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-            return false;
         }
     }
 }

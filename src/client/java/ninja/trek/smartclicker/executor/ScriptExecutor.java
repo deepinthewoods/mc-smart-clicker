@@ -137,7 +137,7 @@ public class ScriptExecutor {
                 try {
                     int slot = Integer.parseInt(instruction.getParameter());
                     if (slot >= 0 && slot <= 8) {
-                        player.getInventory().selected = slot;
+                        player.getInventory().selectSlot(slot);
                     }
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid belt slot: {}", instruction.getParameter());
