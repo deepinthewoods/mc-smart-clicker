@@ -8,10 +8,12 @@ import ninja.trek.smartclicker.script.Script;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.util.List;
 
 public class ScriptExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScriptExecutor.class);
+    private static Field inventorySelectedField = null;
 
     private Script currentScript;
     private int currentInstructionIndex;
@@ -24,6 +26,16 @@ public class ScriptExecutor {
     public ScriptExecutor() {
         this.running = false;
         this.holding = false;
+
+        // Initialize reflection field for inventory selection
+        if (inventorySelectedField == null) {
+            try {
+                inventorySelectedField = Class.forName("net.minecraft.world.entity.player.Inventory").getDeclaredField("selected");
+                inventorySelectedField.setAccessible(true);
+            } catch (Exception e) {
+                LOGGER.error("Failed to initialize inventory selected field reflection", e);
+            }
+        }
     }
 
     public void startScript(Script script) {
@@ -136,11 +148,13 @@ public class ScriptExecutor {
             case BELT_SELECT -> {
                 try {
                     int slot = Integer.parseInt(instruction.getParameter());
-                    if (slot >= 0 && slot <= 8) {
-                        player.getInventory().selectSlot(slot);
+                    if (slot >= 0 && slot <= 8 && inventorySelectedField != null) {
+                        inventorySelectedField.set(player.getInventory(), slot);
                     }
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid belt slot: {}", instruction.getParameter());
+                } catch (Exception e) {
+                    LOGGER.error("Failed to set inventory slot", e);
                 }
             }
             case PAN_MOUSE -> {
