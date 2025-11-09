@@ -11,10 +11,7 @@ public enum CommandType {
     FACE("Face Direction", true),
     JUMP("Jump", false),
     CROUCH("Crouch", true),
-    FORWARD("Forward", false),
-    BACK("Back", false),
-    LEFT("Left", false),
-    RIGHT("Right", false),
+    MOVE("Move", true),
     SWAP_TOOL("swap tool <", true);
 
     private final String displayName;
@@ -39,6 +36,7 @@ public enum CommandType {
             case PAN_MOUSE, TILT_MOUSE -> "0.0";
             case FACE -> "N";
             case CROUCH -> "ON";
+            case MOVE -> "w";
             case SWAP_TOOL -> "10";
             default -> "";
         };

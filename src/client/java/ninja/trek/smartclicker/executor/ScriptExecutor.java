@@ -257,21 +257,27 @@ public class ScriptExecutor {
                 boolean shouldCrouch = param.equals("ON") || param.equals("TRUE");
                 client.options.keyShift.setDown(shouldCrouch);
             }
-            case FORWARD -> {
-                client.options.keyUp.setDown(true);
-                movingForward = true;
-            }
-            case BACK -> {
-                client.options.keyDown.setDown(true);
-                movingBack = true;
-            }
-            case LEFT -> {
-                client.options.keyLeft.setDown(true);
-                movingLeft = true;
-            }
-            case RIGHT -> {
-                client.options.keyRight.setDown(true);
-                movingRight = true;
+            case MOVE -> {
+                String direction = instruction.getParameter().toLowerCase();
+                switch (direction) {
+                    case "w" -> {
+                        client.options.keyUp.setDown(true);
+                        movingForward = true;
+                    }
+                    case "s" -> {
+                        client.options.keyDown.setDown(true);
+                        movingBack = true;
+                    }
+                    case "a" -> {
+                        client.options.keyLeft.setDown(true);
+                        movingLeft = true;
+                    }
+                    case "d" -> {
+                        client.options.keyRight.setDown(true);
+                        movingRight = true;
+                    }
+                    default -> LOGGER.error("Invalid move direction: {}", direction);
+                }
             }
             case SWAP_TOOL -> {
                 try {
