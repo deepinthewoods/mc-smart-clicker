@@ -22,6 +22,8 @@ public class ScriptExecutor {
     private boolean holding;
     private boolean leftHolding;
     private boolean rightHolding;
+    private boolean leftClicking;
+    private boolean rightClicking;
 
     public ScriptExecutor() {
         this.running = false;
@@ -51,6 +53,8 @@ public class ScriptExecutor {
         this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
+        this.leftClicking = false;
+        this.rightClicking = false;
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -59,11 +63,11 @@ public class ScriptExecutor {
 
         Minecraft client = Minecraft.getInstance();
 
-        // Release any held buttons
-        if (leftHolding && client.options.keyAttack.isDown()) {
+        // Release any held or clicked buttons
+        if ((leftHolding || leftClicking) && client.options.keyAttack.isDown()) {
             client.options.keyAttack.setDown(false);
         }
-        if (rightHolding && client.options.keyUse.isDown()) {
+        if ((rightHolding || rightClicking) && client.options.keyUse.isDown()) {
             client.options.keyUse.setDown(false);
         }
 
@@ -71,6 +75,8 @@ public class ScriptExecutor {
         this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
+        this.leftClicking = false;
+        this.rightClicking = false;
         LOGGER.info("Stopped script");
     }
 
@@ -85,6 +91,16 @@ public class ScriptExecutor {
         if (client.player == null) {
             stop();
             return;
+        }
+
+        // Release any clicks from previous tick (clicks are always 1 tick duration)
+        if (leftClicking) {
+            client.options.keyAttack.setDown(false);
+            leftClicking = false;
+        }
+        if (rightClicking) {
+            client.options.keyUse.setDown(false);
+            rightClicking = false;
         }
 
         // Handle delay
@@ -128,11 +144,11 @@ public class ScriptExecutor {
         switch (instruction.getType()) {
             case LEFT_CLICK -> {
                 client.options.keyAttack.setDown(true);
-                client.options.keyAttack.setDown(false);
+                leftClicking = true;
             }
             case RIGHT_CLICK -> {
                 client.options.keyUse.setDown(true);
-                client.options.keyUse.setDown(false);
+                rightClicking = true;
             }
             case LEFT_HOLD -> {
                 client.options.keyAttack.setDown(true);
