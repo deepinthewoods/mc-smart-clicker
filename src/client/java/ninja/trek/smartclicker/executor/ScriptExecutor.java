@@ -130,8 +130,7 @@ public class ScriptExecutor {
                 client.startAttack();
             }
             case RIGHT_CLICK -> {
-                client.options.keyUse.setDown(true);
-                client.options.keyUse.setDown(false);
+                client.startUseItem();
             }
             case LEFT_HOLD -> {
                 client.options.keyAttack.setDown(true);
