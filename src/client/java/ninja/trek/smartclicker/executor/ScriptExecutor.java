@@ -2,6 +2,8 @@ package ninja.trek.smartclicker.executor;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.script.Script;
@@ -24,6 +26,10 @@ public class ScriptExecutor {
     private boolean rightHolding;
     private boolean leftClicking;
     private boolean rightClicking;
+    private boolean movingForward;
+    private boolean movingBack;
+    private boolean movingLeft;
+    private boolean movingRight;
 
     public ScriptExecutor() {
         this.running = false;
@@ -55,6 +61,10 @@ public class ScriptExecutor {
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.movingForward = false;
+        this.movingBack = false;
+        this.movingLeft = false;
+        this.movingRight = false;
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -71,12 +81,30 @@ public class ScriptExecutor {
             client.options.keyUse.setDown(false);
         }
 
+        // Release any movement keys
+        if (movingForward && client.options.keyUp.isDown()) {
+            client.options.keyUp.setDown(false);
+        }
+        if (movingBack && client.options.keyDown.isDown()) {
+            client.options.keyDown.setDown(false);
+        }
+        if (movingLeft && client.options.keyLeft.isDown()) {
+            client.options.keyLeft.setDown(false);
+        }
+        if (movingRight && client.options.keyRight.isDown()) {
+            client.options.keyRight.setDown(false);
+        }
+
         this.running = false;
         this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.movingForward = false;
+        this.movingBack = false;
+        this.movingLeft = false;
+        this.movingRight = false;
         LOGGER.info("Stopped script");
     }
 
@@ -101,6 +129,24 @@ public class ScriptExecutor {
         if (rightClicking) {
             client.options.keyUse.setDown(false);
             rightClicking = false;
+        }
+
+        // Release any movement from previous tick (movement is always 1 tick duration)
+        if (movingForward) {
+            client.options.keyUp.setDown(false);
+            movingForward = false;
+        }
+        if (movingBack) {
+            client.options.keyDown.setDown(false);
+            movingBack = false;
+        }
+        if (movingLeft) {
+            client.options.keyLeft.setDown(false);
+            movingLeft = false;
+        }
+        if (movingRight) {
+            client.options.keyRight.setDown(false);
+            movingRight = false;
         }
 
         // Handle delay
@@ -210,6 +256,108 @@ public class ScriptExecutor {
                 String param = instruction.getParameter().toUpperCase();
                 boolean shouldCrouch = param.equals("ON") || param.equals("TRUE");
                 client.options.keyShift.setDown(shouldCrouch);
+            }
+            case MOVE -> {
+                String direction = instruction.getParameter().toLowerCase();
+                switch (direction) {
+                    case "w" -> {
+                        client.options.keyUp.setDown(true);
+                        movingForward = true;
+                    }
+                    case "s" -> {
+                        client.options.keyDown.setDown(true);
+                        movingBack = true;
+                    }
+                    case "a" -> {
+                        client.options.keyLeft.setDown(true);
+                        movingLeft = true;
+                    }
+                    case "d" -> {
+                        client.options.keyRight.setDown(true);
+                        movingRight = true;
+                    }
+                    default -> LOGGER.error("Invalid move direction: {}", direction);
+                }
+            }
+            case SET_YAW -> {
+                try {
+                    float yaw = Float.parseFloat(instruction.getParameter());
+                    player.setYRot(yaw);
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid yaw value: {}", instruction.getParameter());
+                }
+            }
+            case YAW -> {
+                try {
+                    float degrees = Float.parseFloat(instruction.getParameter());
+                    float newYaw = player.getYRot() + degrees;
+                    player.setYRot(newYaw);
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid yaw offset: {}", instruction.getParameter());
+                }
+            }
+            case SWAP_TOOL -> {
+                try {
+                    int durabilityThreshold = Integer.parseInt(instruction.getParameter());
+                    Inventory inventory = player.getInventory();
+
+                    // Get current hotbar slot using reflection
+                    if (inventorySelectedField == null) {
+                        LOGGER.error("Cannot swap tool: inventory reflection not initialized");
+                        break;
+                    }
+
+                    int currentSlot = (int) inventorySelectedField.get(inventory);
+                    ItemStack currentItem = inventory.getItem(currentSlot);
+
+                    // Only proceed if there's an item and it's damageable
+                    if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                        int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
+
+                        // Only swap if durability is below threshold
+                        if (remainingDurability < durabilityThreshold) {
+                            boolean swapped = false;
+
+                            // Search inventory (slots 9-35) for replacement
+                            for (int i = 9; i < 36; i++) {
+                                ItemStack candidateItem = inventory.getItem(i);
+
+                                // Check if it's the same item type
+                                if (!candidateItem.isEmpty() && ItemStack.isSameItem(currentItem, candidateItem)) {
+                                    int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
+
+                                    // Swap if candidate has more durability than threshold
+                                    if (candidateDurability > durabilityThreshold) {
+                                        // Perform swap
+                                        inventory.setItem(currentSlot, candidateItem);
+                                        inventory.setItem(i, currentItem);
+                                        swapped = true;
+                                        LOGGER.info("Swapped tool in slot {} with inventory slot {}", currentSlot, i);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // If no replacement found, move current tool to empty slot
+                            if (!swapped) {
+                                for (int i = 9; i < 36; i++) {
+                                    ItemStack slotItem = inventory.getItem(i);
+                                    if (slotItem.isEmpty()) {
+                                        // Move current tool to empty slot
+                                        inventory.setItem(i, currentItem);
+                                        inventory.setItem(currentSlot, ItemStack.EMPTY);
+                                        LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid durability threshold: {}", instruction.getParameter());
+                } catch (Exception e) {
+                    LOGGER.error("Failed to swap tool", e);
+                }
             }
         }
     }

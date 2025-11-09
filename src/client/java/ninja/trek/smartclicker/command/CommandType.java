@@ -10,7 +10,11 @@ public enum CommandType {
     TILT_MOUSE("Tilt Mouse", true),
     FACE("Face Direction", true),
     JUMP("Jump", false),
-    CROUCH("Crouch", true);
+    CROUCH("Crouch", true),
+    MOVE("Move", true),
+    SET_YAW("setYaw", true),
+    YAW("yaw", true),
+    SWAP_TOOL("swap tool <", true);
 
     private final String displayName;
     private final boolean hasParameter;
@@ -34,6 +38,9 @@ public enum CommandType {
             case PAN_MOUSE, TILT_MOUSE -> "0.0";
             case FACE -> "N";
             case CROUCH -> "ON";
+            case MOVE -> "w";
+            case SET_YAW, YAW -> "0.0";
+            case SWAP_TOOL -> "10";
             default -> "";
         };
     }
