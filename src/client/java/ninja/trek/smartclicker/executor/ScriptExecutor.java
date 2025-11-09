@@ -127,8 +127,7 @@ public class ScriptExecutor {
 
         switch (instruction.getType()) {
             case LEFT_CLICK -> {
-                client.options.keyAttack.setDown(true);
-                client.options.keyAttack.setDown(false);
+                client.startAttack();
             }
             case RIGHT_CLICK -> {
                 client.options.keyUse.setDown(true);
