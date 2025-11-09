@@ -116,7 +116,8 @@ public class ScriptEditorScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        this.renderBackground(graphics, mouseX, mouseY, delta);
+        // Render a simple semi-transparent background without blur to avoid the "Can only blur once per frame" error
+        graphics.fill(0, 0, this.width, this.height, 0xC0101010);
         super.render(graphics, mouseX, mouseY, delta);
 
         // Draw title
