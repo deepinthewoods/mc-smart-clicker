@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.network.chat.Component;
 import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
@@ -94,8 +95,7 @@ public class ScriptEditorScreen extends Screen {
             this.addRenderableWidget(row.downButton);
             this.addRenderableWidget(row.addButton);
             this.addRenderableWidget(row.paramField);
-            this.addRenderableWidget(row.delayDecButton);
-            this.addRenderableWidget(row.delayIncButton);
+            this.addRenderableWidget(row.delaySlider);
             y += ROW_HEIGHT;
         }
     }
@@ -139,16 +139,13 @@ public class ScriptEditorScreen extends Screen {
         public final Button upButton;
         public final Button downButton;
         public final Button addButton;
-        public final Button delayDecButton;
-        public final Button delayIncButton;
+        public final AbstractSliderButton delaySlider;
         public final EditBox paramField;
-        private int delayValue;
 
         public CommandRow(CommandInstruction instruction, int index, int y) {
             this.instruction = instruction;
             this.index = index;
             this.y = y;
-            this.delayValue = instruction.getPostDelay();
 
             int x = COMMAND_BUTTONS_X;
 
@@ -195,24 +192,25 @@ public class ScriptEditorScreen extends Screen {
             }
             x += 82;
 
-            // Delay controls
-            int delayX = COMMAND_BUTTONS_X + 312;
+            // Delay slider
+            int delayX = COMMAND_BUTTONS_X + 280;
+            this.delaySlider = new AbstractSliderButton(delayX, y, 80, 20,
+                Component.literal("Delay: " + instruction.getPostDelay() + "t"),
+                (instruction.getPostDelay() - 1) / 49.0) {
 
-            // Delay decrease button
-            this.delayDecButton = Button.builder(Component.literal("-"), button -> {
-                if (instruction.getPostDelay() > 1) {
-                    instruction.setPostDelay(instruction.getPostDelay() - 1);
+                @Override
+                protected void updateMessage() {
+                    int delay = (int) Math.round(this.value * 49) + 1;
+                    this.setMessage(Component.literal("Delay: " + delay + "t"));
+                }
+
+                @Override
+                protected void applyValue() {
+                    int delay = (int) Math.round(this.value * 49) + 1;
+                    instruction.setPostDelay(delay);
                     SmartClickerClient.getScriptManager().saveScript(script);
                 }
-            }).bounds(delayX, y, 15, 20).build();
-
-            // Delay increase button
-            this.delayIncButton = Button.builder(Component.literal("+"), button -> {
-                if (instruction.getPostDelay() < 50) {
-                    instruction.setPostDelay(instruction.getPostDelay() + 1);
-                    SmartClickerClient.getScriptManager().saveScript(script);
-                }
-            }).bounds(delayX + 17, y, 15, 20).build();
+            };
 
             // Add button [+]
             this.addButton = Button.builder(Component.literal("+"), button -> {
@@ -228,10 +226,11 @@ public class ScriptEditorScreen extends Screen {
             graphics.drawString(font, instruction.getType().getDisplayName(),
                 COMMAND_BUTTONS_X + 68, y + 6, 0xFFFFFF);
 
-            // Draw delay value
-            int delayX = COMMAND_BUTTONS_X + 252;
-            graphics.drawString(font, "Delay: " + instruction.getPostDelay() + "t",
-                delayX, y + 6, 0xFFFFFF);
+            // Draw parameter label
+            if (instruction.getType().hasParameter()) {
+                graphics.drawString(font, "Param:",
+                    COMMAND_BUTTONS_X + 160, y + 6, 0xFFFFFF);
+            }
         }
     }
 }
