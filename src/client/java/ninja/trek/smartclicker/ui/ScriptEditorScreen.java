@@ -179,7 +179,7 @@ public class ScriptEditorScreen extends Screen {
 
             // Parameter field
             x += 100; // Space for command name
-            this.paramField = new EditBox(font, x, y + 2, 80, 16, Component.literal("Param"));
+            this.paramField = new EditBox(ScriptEditorScreen.this.font, x, y + 2, 80, 16, Component.literal("Param"));
             this.paramField.setMaxLength(20);
             this.paramField.setValue(instruction.getParameter());
             this.paramField.setResponder(text -> {
@@ -223,12 +223,12 @@ public class ScriptEditorScreen extends Screen {
 
         public void render(GuiGraphics graphics, int mouseX, int mouseY) {
             // Draw command type name
-            graphics.drawString(font, instruction.getType().getDisplayName(),
+            graphics.drawString(ScriptEditorScreen.this.font, instruction.getType().getDisplayName(),
                 COMMAND_BUTTONS_X + 68, y + 6, 0xFFFFFF);
 
             // Draw parameter label
             if (instruction.getType().hasParameter()) {
-                graphics.drawString(font, "Param:",
+                graphics.drawString(ScriptEditorScreen.this.font, "Param:",
                     COMMAND_BUTTONS_X + 160, y + 6, 0xFFFFFF);
             }
         }
