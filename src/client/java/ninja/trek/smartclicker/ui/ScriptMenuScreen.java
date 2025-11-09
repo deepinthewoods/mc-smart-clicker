@@ -51,6 +51,7 @@ public class ScriptMenuScreen extends Screen {
             // Add buttons to the screen
             this.addRenderableWidget(row.runButton);
             this.addRenderableWidget(row.editButton);
+            this.addRenderableWidget(row.deleteButton);
             y += ROW_HEIGHT;
         }
 
@@ -84,6 +85,7 @@ public class ScriptMenuScreen extends Screen {
         private final int y;
         public final Button runButton;
         public final Button editButton;
+        public final Button deleteButton;
 
         public ScriptRow(Script script, int y) {
             this.script = script;
@@ -104,6 +106,20 @@ public class ScriptMenuScreen extends Screen {
                     minecraft.setScreen(new ScriptEditorScreen(ScriptMenuScreen.this, script));
                 }
             }).bounds(centerX + 105, y, 45, BUTTON_HEIGHT).build();
+
+            // Delete button
+            this.deleteButton = Button.builder(Component.literal("Delete"), button -> {
+                if (minecraft != null) {
+                    minecraft.setScreen(new ConfirmationDialog(
+                        ScriptMenuScreen.this,
+                        "Delete script '" + script.getName() + "'?",
+                        () -> {
+                            SmartClickerClient.getScriptManager().deleteScript(script);
+                            buildScriptList();
+                        }
+                    ));
+                }
+            }).bounds(centerX + 155, y, 50, BUTTON_HEIGHT).build();
         }
     }
 }

@@ -108,7 +108,6 @@ public class ScriptEditorScreen extends Screen {
             if (row.paramLabel != null) {
                 this.addRenderableWidget(row.paramLabel);
             }
-            this.addRenderableWidget(row.addButton);
             this.addRenderableWidget(row.paramField);
             this.addRenderableWidget(row.delaySlider);
             y += ROW_HEIGHT;
@@ -125,7 +124,6 @@ public class ScriptEditorScreen extends Screen {
             if (row.paramLabel != null) {
                 this.removeWidget(row.paramLabel);
             }
-            this.removeWidget(row.addButton);
             this.removeWidget(row.paramField);
             this.removeWidget(row.delaySlider);
         }
@@ -155,7 +153,6 @@ public class ScriptEditorScreen extends Screen {
         public final Button removeButton;
         public final Button upButton;
         public final Button downButton;
-        public final Button addButton;
         public final Button commandTypeLabel;
         public final Button paramLabel;
         public final AbstractSliderButton delaySlider;
@@ -225,7 +222,7 @@ public class ScriptEditorScreen extends Screen {
             x += 82;
 
             // Delay slider
-            int delayX = COMMAND_BUTTONS_X + 280;
+            int delayX = COMMAND_BUTTONS_X + 310;
             this.delaySlider = new AbstractSliderButton(delayX, y, 80, 20,
                 Component.literal("Delay: " + instruction.getPostDelay() + "t"),
                 (instruction.getPostDelay() - 1) / 49.0) {
@@ -243,14 +240,6 @@ public class ScriptEditorScreen extends Screen {
                     SmartClickerClient.getScriptManager().saveScript(script);
                 }
             };
-
-            // Add button [+]
-            this.addButton = Button.builder(Component.literal("+"), button -> {
-                CommandInstruction newInstruction = new CommandInstruction(CommandType.LEFT_CLICK, "", 1);
-                script.getInstructions().add(index + 1, newInstruction);
-                SmartClickerClient.getScriptManager().saveScript(script);
-                rebuildCommandList();
-            }).bounds(width - 250, y, 20, 20).build();
         }
     }
 }
