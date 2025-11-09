@@ -2,6 +2,8 @@ package ninja.trek.smartclicker.executor;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.script.Script;
@@ -270,6 +272,67 @@ public class ScriptExecutor {
             case RIGHT -> {
                 client.options.keyRight.setDown(true);
                 movingRight = true;
+            }
+            case SWAP_TOOL -> {
+                try {
+                    int durabilityThreshold = Integer.parseInt(instruction.getParameter());
+                    Inventory inventory = player.getInventory();
+
+                    // Get current hotbar slot
+                    int currentSlot = inventorySelectedField != null
+                        ? (int) inventorySelectedField.get(inventory)
+                        : inventory.selected;
+
+                    ItemStack currentItem = inventory.getItem(currentSlot);
+
+                    // Only proceed if there's an item and it's damageable
+                    if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                        int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
+
+                        // Only swap if durability is below threshold
+                        if (remainingDurability < durabilityThreshold) {
+                            boolean swapped = false;
+
+                            // Search inventory (slots 9-35) for replacement
+                            for (int i = 9; i < 36; i++) {
+                                ItemStack candidateItem = inventory.getItem(i);
+
+                                // Check if it's the same item type
+                                if (!candidateItem.isEmpty() && ItemStack.isSameItem(currentItem, candidateItem)) {
+                                    int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
+
+                                    // Swap if candidate has more durability than threshold
+                                    if (candidateDurability > durabilityThreshold) {
+                                        // Perform swap
+                                        inventory.setItem(currentSlot, candidateItem);
+                                        inventory.setItem(i, currentItem);
+                                        swapped = true;
+                                        LOGGER.info("Swapped tool in slot {} with inventory slot {}", currentSlot, i);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // If no replacement found, move current tool to empty slot
+                            if (!swapped) {
+                                for (int i = 9; i < 36; i++) {
+                                    ItemStack slotItem = inventory.getItem(i);
+                                    if (slotItem.isEmpty()) {
+                                        // Move current tool to empty slot
+                                        inventory.setItem(i, currentItem);
+                                        inventory.setItem(currentSlot, ItemStack.EMPTY);
+                                        LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid durability threshold: {}", instruction.getParameter());
+                } catch (Exception e) {
+                    LOGGER.error("Failed to swap tool", e);
+                }
             }
         }
     }
