@@ -102,6 +102,14 @@ public class ScriptEditorScreen extends Screen {
 
     private void rebuildCommandList() {
         // Remove old command row widgets
+        for (CommandRow row : commandRows) {
+            this.removeWidget(row.removeButton);
+            this.removeWidget(row.upButton);
+            this.removeWidget(row.downButton);
+            this.removeWidget(row.addButton);
+            this.removeWidget(row.paramField);
+            this.removeWidget(row.delaySlider);
+        }
         commandRows.clear();
         buildCommandList();
     }
