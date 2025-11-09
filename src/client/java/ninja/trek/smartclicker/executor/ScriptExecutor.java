@@ -279,6 +279,23 @@ public class ScriptExecutor {
                     default -> LOGGER.error("Invalid move direction: {}", direction);
                 }
             }
+            case SET_YAW -> {
+                try {
+                    float yaw = Float.parseFloat(instruction.getParameter());
+                    player.setYRot(yaw);
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid yaw value: {}", instruction.getParameter());
+                }
+            }
+            case YAW -> {
+                try {
+                    float degrees = Float.parseFloat(instruction.getParameter());
+                    float newYaw = player.getYRot() + degrees;
+                    player.setYRot(newYaw);
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid yaw offset: {}", instruction.getParameter());
+                }
+            }
             case SWAP_TOOL -> {
                 try {
                     int durabilityThreshold = Integer.parseInt(instruction.getParameter());
