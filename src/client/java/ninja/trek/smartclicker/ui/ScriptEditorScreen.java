@@ -59,6 +59,17 @@ public class ScriptEditorScreen extends Screen {
             onClose();
         }).bounds(10, 10, 60, 20).build());
 
+        // Section labels (non-clickable)
+        Button commandsLabel = Button.builder(Component.literal("Commands:"), button -> {})
+            .bounds(COMMAND_BUTTONS_X, 55, 80, 12).build();
+        commandsLabel.active = false;
+        this.addRenderableWidget(commandsLabel);
+
+        Button availableLabel = Button.builder(Component.literal("Available:"), button -> {})
+            .bounds(this.width - 120, 55, 80, 12).build();
+        availableLabel.active = false;
+        this.addRenderableWidget(availableLabel);
+
         // Command palette on the right
         buildCommandPalette();
 
@@ -93,6 +104,10 @@ public class ScriptEditorScreen extends Screen {
             this.addRenderableWidget(row.removeButton);
             this.addRenderableWidget(row.upButton);
             this.addRenderableWidget(row.downButton);
+            this.addRenderableWidget(row.commandTypeLabel);
+            if (row.paramLabel != null) {
+                this.addRenderableWidget(row.paramLabel);
+            }
             this.addRenderableWidget(row.addButton);
             this.addRenderableWidget(row.paramField);
             this.addRenderableWidget(row.delaySlider);
@@ -106,6 +121,10 @@ public class ScriptEditorScreen extends Screen {
             this.removeWidget(row.removeButton);
             this.removeWidget(row.upButton);
             this.removeWidget(row.downButton);
+            this.removeWidget(row.commandTypeLabel);
+            if (row.paramLabel != null) {
+                this.removeWidget(row.paramLabel);
+            }
             this.removeWidget(row.addButton);
             this.removeWidget(row.paramField);
             this.removeWidget(row.delaySlider);
@@ -119,18 +138,6 @@ public class ScriptEditorScreen extends Screen {
         // Render a simple semi-transparent background without blur to avoid the "Can only blur once per frame" error
         graphics.fill(0, 0, this.width, this.height, 0xC0101010);
         super.render(graphics, mouseX, mouseY, delta);
-
-        // Draw title
-        graphics.drawString(this.font, "Edit Script: " + script.getName(), this.width / 2 - 100, 15, 0xFFFFFF);
-
-        // Draw section labels
-        graphics.drawString(this.font, "Commands:", COMMAND_BUTTONS_X, 55, 0xFFFFFF);
-        graphics.drawString(this.font, "Available:", this.width - 120, 55, 0xFFFFFF);
-
-        // Draw command rows (just the command names and delay controls)
-        for (CommandRow row : commandRows) {
-            row.render(graphics, mouseX, mouseY);
-        }
     }
 
     @Override
@@ -149,6 +156,8 @@ public class ScriptEditorScreen extends Screen {
         public final Button upButton;
         public final Button downButton;
         public final Button addButton;
+        public final Button commandTypeLabel;
+        public final Button paramLabel;
         public final AbstractSliderButton delaySlider;
         public final EditBox paramField;
 
@@ -183,12 +192,25 @@ public class ScriptEditorScreen extends Screen {
             }).bounds(x, y, 20, 20).build();
             x += 22;
 
-            // Command type display (not editable, just shows name)
+            // Command type display label (non-clickable)
             x += 2;
-            // We'll draw this as text in render()
+            this.commandTypeLabel = Button.builder(Component.literal(instruction.getType().getDisplayName()), button -> {})
+                .bounds(x, y, 100, 20).build();
+            this.commandTypeLabel.active = false;
+            x += 102;
+
+            // Parameter label (non-clickable)
+            if (instruction.getType().hasParameter()) {
+                this.paramLabel = Button.builder(Component.literal("Param:"), button -> {})
+                    .bounds(x, y, 40, 20).build();
+                this.paramLabel.active = false;
+                x += 42;
+            } else {
+                this.paramLabel = null;
+                x += 42;
+            }
 
             // Parameter field
-            x += 100; // Space for command name
             this.paramField = new EditBox(ScriptEditorScreen.this.font, x, y + 2, 80, 16, Component.literal("Param"));
             this.paramField.setMaxLength(20);
             this.paramField.setValue(instruction.getParameter());
@@ -229,18 +251,6 @@ public class ScriptEditorScreen extends Screen {
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
             }).bounds(width - 250, y, 20, 20).build();
-        }
-
-        public void render(GuiGraphics graphics, int mouseX, int mouseY) {
-            // Draw command type name
-            graphics.drawString(ScriptEditorScreen.this.font, instruction.getType().getDisplayName(),
-                COMMAND_BUTTONS_X + 68, y + 6, 0xFFFFFF);
-
-            // Draw parameter label
-            if (instruction.getType().hasParameter()) {
-                graphics.drawString(ScriptEditorScreen.this.font, "Param:",
-                    COMMAND_BUTTONS_X + 160, y + 6, 0xFFFFFF);
-            }
         }
     }
 }
