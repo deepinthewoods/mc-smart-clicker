@@ -36,6 +36,9 @@ public class ScriptEditorScreen extends Screen {
     protected void init() {
         super.init();
 
+        // Clear any existing command rows (important for screen reinit on resize)
+        commandRows.clear();
+
         // Name field at top
         nameField = new EditBox(this.font, this.width / 2 - 100, 30, 150, 20, Component.literal("Script Name"));
         nameField.setMaxLength(50);
@@ -101,7 +104,15 @@ public class ScriptEditorScreen extends Screen {
     }
 
     private void rebuildCommandList() {
-        // Remove old command row widgets
+        // Remove old command row widgets from the screen
+        for (CommandRow row : commandRows) {
+            this.removeWidget(row.removeButton);
+            this.removeWidget(row.upButton);
+            this.removeWidget(row.downButton);
+            this.removeWidget(row.addButton);
+            this.removeWidget(row.paramField);
+            this.removeWidget(row.delaySlider);
+        }
         commandRows.clear();
         buildCommandList();
     }
