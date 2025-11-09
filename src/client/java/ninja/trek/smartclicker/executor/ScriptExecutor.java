@@ -24,6 +24,10 @@ public class ScriptExecutor {
     private boolean rightHolding;
     private boolean leftClicking;
     private boolean rightClicking;
+    private boolean movingForward;
+    private boolean movingBack;
+    private boolean movingLeft;
+    private boolean movingRight;
 
     public ScriptExecutor() {
         this.running = false;
@@ -55,6 +59,10 @@ public class ScriptExecutor {
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.movingForward = false;
+        this.movingBack = false;
+        this.movingLeft = false;
+        this.movingRight = false;
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -71,12 +79,30 @@ public class ScriptExecutor {
             client.options.keyUse.setDown(false);
         }
 
+        // Release any movement keys
+        if (movingForward && client.options.keyUp.isDown()) {
+            client.options.keyUp.setDown(false);
+        }
+        if (movingBack && client.options.keyDown.isDown()) {
+            client.options.keyDown.setDown(false);
+        }
+        if (movingLeft && client.options.keyLeft.isDown()) {
+            client.options.keyLeft.setDown(false);
+        }
+        if (movingRight && client.options.keyRight.isDown()) {
+            client.options.keyRight.setDown(false);
+        }
+
         this.running = false;
         this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.movingForward = false;
+        this.movingBack = false;
+        this.movingLeft = false;
+        this.movingRight = false;
         LOGGER.info("Stopped script");
     }
 
@@ -101,6 +127,24 @@ public class ScriptExecutor {
         if (rightClicking) {
             client.options.keyUse.setDown(false);
             rightClicking = false;
+        }
+
+        // Release any movement from previous tick (movement is always 1 tick duration)
+        if (movingForward) {
+            client.options.keyUp.setDown(false);
+            movingForward = false;
+        }
+        if (movingBack) {
+            client.options.keyDown.setDown(false);
+            movingBack = false;
+        }
+        if (movingLeft) {
+            client.options.keyLeft.setDown(false);
+            movingLeft = false;
+        }
+        if (movingRight) {
+            client.options.keyRight.setDown(false);
+            movingRight = false;
         }
 
         // Handle delay
@@ -210,6 +254,22 @@ public class ScriptExecutor {
                 String param = instruction.getParameter().toUpperCase();
                 boolean shouldCrouch = param.equals("ON") || param.equals("TRUE");
                 client.options.keyShift.setDown(shouldCrouch);
+            }
+            case FORWARD -> {
+                client.options.keyUp.setDown(true);
+                movingForward = true;
+            }
+            case BACK -> {
+                client.options.keyDown.setDown(true);
+                movingBack = true;
+            }
+            case LEFT -> {
+                client.options.keyLeft.setDown(true);
+                movingLeft = true;
+            }
+            case RIGHT -> {
+                client.options.keyRight.setDown(true);
+                movingRight = true;
             }
         }
     }

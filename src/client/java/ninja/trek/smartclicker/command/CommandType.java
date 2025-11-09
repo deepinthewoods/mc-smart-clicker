@@ -10,7 +10,11 @@ public enum CommandType {
     TILT_MOUSE("Tilt Mouse", true),
     FACE("Face Direction", true),
     JUMP("Jump", false),
-    CROUCH("Crouch", true);
+    CROUCH("Crouch", true),
+    FORWARD("Forward", false),
+    BACK("Back", false),
+    LEFT("Left", false),
+    RIGHT("Right", false);
 
     private final String displayName;
     private final boolean hasParameter;
