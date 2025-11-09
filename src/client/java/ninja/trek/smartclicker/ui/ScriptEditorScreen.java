@@ -1,10 +1,10 @@
 package ninja.trek.smartclicker.ui;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
@@ -23,10 +23,10 @@ public class ScriptEditorScreen extends Screen {
     private static final int LIST_TOP = 70;
     private static final int COMMAND_BUTTONS_X = 10;
 
-    private TextFieldWidget nameField;
+    private EditBox nameField;
 
     public ScriptEditorScreen(Screen parent, Script script) {
-        super(Text.literal("Edit Script"));
+        super(Component.literal("Edit Script"));
         this.parent = parent;
         this.script = script;
     }
@@ -36,27 +36,27 @@ public class ScriptEditorScreen extends Screen {
         super.init();
 
         // Name field at top
-        nameField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, 30, 150, 20, Text.literal("Script Name"));
+        nameField = new EditBox(this.font, this.width / 2 - 100, 30, 150, 20, Component.literal("Script Name"));
         nameField.setMaxLength(50);
-        nameField.setText(script.getName());
-        this.addDrawableChild(nameField);
+        nameField.setValue(script.getName());
+        this.addRenderableWidget(nameField);
 
         // Rename button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Rename"), button -> {
-            script.setName(nameField.getText());
+        this.addRenderableWidget(Button.builder(Component.literal("Rename"), button -> {
+            script.setName(nameField.getValue());
             SmartClickerClient.getScriptManager().saveScript(script);
-        }).dimensions(this.width / 2 + 55, 30, 60, 20).build());
+        }).bounds(this.width / 2 + 55, 30, 60, 20).build());
 
         // Delete button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Delete"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Delete"), button -> {
             SmartClickerClient.getScriptManager().deleteScript(script);
-            close();
-        }).dimensions(this.width / 2 + 120, 30, 60, 20).build());
+            onClose();
+        }).bounds(this.width / 2 + 120, 30, 60, 20).build());
 
         // Back button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Back"), button -> {
-            close();
-        }).dimensions(10, 10, 60, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Back"), button -> {
+            onClose();
+        }).bounds(10, 10, 60, 20).build());
 
         // Command palette on the right
         buildCommandPalette();
@@ -70,12 +70,12 @@ public class ScriptEditorScreen extends Screen {
         int y = LIST_TOP;
 
         for (CommandType type : CommandType.values()) {
-            this.addDrawableChild(ButtonWidget.builder(Text.literal(type.getDisplayName()), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal(type.getDisplayName()), button -> {
                 CommandInstruction newInstruction = new CommandInstruction(type, type.getDefaultParameter(), 1);
                 script.addInstruction(newInstruction);
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
-            }).dimensions(x, y, 110, 20).build());
+            }).bounds(x, y, 110, 20).build());
             y += 22;
         }
     }
@@ -99,19 +99,19 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+        super.render(graphics, mouseX, mouseY, delta);
 
         // Draw title
-        context.drawTextWithShadow(this.textRenderer, "Edit Script: " + script.getName(), this.width / 2 - 100, 15, 0xFFFFFF);
+        graphics.drawString(this.font, "Edit Script: " + script.getName(), this.width / 2 - 100, 15, 0xFFFFFF);
 
         // Draw section labels
-        context.drawTextWithShadow(this.textRenderer, "Commands:", COMMAND_BUTTONS_X, 55, 0xFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, "Available:", this.width - 120, 55, 0xFFFFFF);
+        graphics.drawString(this.font, "Commands:", COMMAND_BUTTONS_X, 55, 0xFFFFFF);
+        graphics.drawString(this.font, "Available:", this.width - 120, 55, 0xFFFFFF);
 
         // Draw command rows
         for (CommandRow row : commandRows) {
-            row.render(context, mouseX, mouseY);
+            row.render(graphics, mouseX, mouseY);
         }
     }
 
@@ -127,10 +127,10 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         SmartClickerClient.getScriptManager().saveScript(script);
-        if (client != null) {
-            client.setScreen(parent);
+        if (minecraft != null) {
+            minecraft.setScreen(parent);
         }
     }
 
@@ -138,11 +138,11 @@ public class ScriptEditorScreen extends Screen {
         private final CommandInstruction instruction;
         private final int index;
         private final int y;
-        private final ButtonWidget removeButton;
-        private final ButtonWidget upButton;
-        private final ButtonWidget downButton;
-        private final ButtonWidget addButton;
-        private final TextFieldWidget paramField;
+        private final Button removeButton;
+        private final Button upButton;
+        private final Button downButton;
+        private final Button addButton;
+        private final EditBox paramField;
         private int delayValue;
 
         public CommandRow(CommandInstruction instruction, int index, int y) {
@@ -154,27 +154,27 @@ public class ScriptEditorScreen extends Screen {
             int x = COMMAND_BUTTONS_X;
 
             // Remove button [-]
-            this.removeButton = ButtonWidget.builder(Text.literal("-"), button -> {
+            this.removeButton = Button.builder(Component.literal("-"), button -> {
                 script.removeInstruction(index);
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
-            }).dimensions(x, y, 20, 20).build();
+            }).bounds(x, y, 20, 20).build();
             x += 22;
 
             // Up button [↑]
-            this.upButton = ButtonWidget.builder(Text.literal("↑"), button -> {
+            this.upButton = Button.builder(Component.literal("↑"), button -> {
                 script.moveInstructionUp(index);
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
-            }).dimensions(x, y, 20, 20).build();
+            }).bounds(x, y, 20, 20).build();
             x += 22;
 
             // Down button [↓]
-            this.downButton = ButtonWidget.builder(Text.literal("↓"), button -> {
+            this.downButton = Button.builder(Component.literal("↓"), button -> {
                 script.moveInstructionDown(index);
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
-            }).dimensions(x, y, 20, 20).build();
+            }).bounds(x, y, 20, 20).build();
             x += 22;
 
             // Command type display (not editable, just shows name)
@@ -183,16 +183,16 @@ public class ScriptEditorScreen extends Screen {
 
             // Parameter field
             x += 100; // Space for command name
-            this.paramField = new TextFieldWidget(textRenderer, x, y + 2, 80, 16, Text.literal("Param"));
+            this.paramField = new EditBox(font, x, y + 2, 80, 16, Component.literal("Param"));
             this.paramField.setMaxLength(20);
-            this.paramField.setText(instruction.getParameter());
-            this.paramField.setChangedListener(text -> {
+            this.paramField.setValue(instruction.getParameter());
+            this.paramField.setResponder(text -> {
                 instruction.setParameter(text);
                 SmartClickerClient.getScriptManager().saveScript(script);
             });
             if (!instruction.getType().hasParameter()) {
                 this.paramField.setEditable(false);
-                this.paramField.setText("");
+                this.paramField.setValue("");
             }
             x += 82;
 
@@ -201,46 +201,46 @@ public class ScriptEditorScreen extends Screen {
             x += 5;
 
             // Add button [+]
-            this.addButton = ButtonWidget.builder(Text.literal("+"), button -> {
+            this.addButton = Button.builder(Component.literal("+"), button -> {
                 CommandInstruction newInstruction = new CommandInstruction(CommandType.LEFT_CLICK, "", 1);
                 script.getInstructions().add(index + 1, newInstruction);
                 SmartClickerClient.getScriptManager().saveScript(script);
                 rebuildCommandList();
-            }).dimensions(width - 250, y, 20, 20).build();
+            }).bounds(width - 250, y, 20, 20).build();
         }
 
-        public void render(DrawContext context, int mouseX, int mouseY) {
-            removeButton.render(context, mouseX, mouseY, 0);
-            upButton.render(context, mouseX, mouseY, 0);
-            downButton.render(context, mouseX, mouseY, 0);
+        public void render(GuiGraphics graphics, int mouseX, int mouseY) {
+            removeButton.render(graphics, mouseX, mouseY, 0);
+            upButton.render(graphics, mouseX, mouseY, 0);
+            downButton.render(graphics, mouseX, mouseY, 0);
 
             // Draw command type name
-            context.drawTextWithShadow(textRenderer, instruction.getType().getDisplayName(),
+            graphics.drawString(font, instruction.getType().getDisplayName(),
                 COMMAND_BUTTONS_X + 68, y + 6, 0xFFFFFF);
 
             // Draw parameter field
-            paramField.render(context, mouseX, mouseY, 0);
+            paramField.render(graphics, mouseX, mouseY, 0);
 
             // Draw delay value and controls
             int delayX = COMMAND_BUTTONS_X + 252;
-            context.drawTextWithShadow(textRenderer, "Delay: " + instruction.getPostDelay() + "t",
+            graphics.drawString(font, "Delay: " + instruction.getPostDelay() + "t",
                 delayX, y + 6, 0xFFFFFF);
 
             // Delay decrease button
             if (mouseX >= delayX + 60 && mouseX <= delayX + 75 &&
                 mouseY >= y && mouseY <= y + 20) {
-                context.fill(delayX + 60, y, delayX + 75, y + 20, 0x80FFFFFF);
+                graphics.fill(delayX + 60, y, delayX + 75, y + 20, 0x80FFFFFF);
             }
-            context.drawTextWithShadow(textRenderer, "-", delayX + 65, y + 6, 0xFFFFFF);
+            graphics.drawString(font, "-", delayX + 65, y + 6, 0xFFFFFF);
 
             // Delay increase button
             if (mouseX >= delayX + 77 && mouseX <= delayX + 92 &&
                 mouseY >= y && mouseY <= y + 20) {
-                context.fill(delayX + 77, y, delayX + 92, y + 20, 0x80FFFFFF);
+                graphics.fill(delayX + 77, y, delayX + 92, y + 20, 0x80FFFFFF);
             }
-            context.drawTextWithShadow(textRenderer, "+", delayX + 82, y + 6, 0xFFFFFF);
+            graphics.drawString(font, "+", delayX + 82, y + 6, 0xFFFFFF);
 
-            addButton.render(context, mouseX, mouseY, 0);
+            addButton.render(graphics, mouseX, mouseY, 0);
         }
 
         public boolean mouseClicked(double mouseX, double mouseY, int button) {

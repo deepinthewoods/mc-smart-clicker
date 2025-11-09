@@ -1,8 +1,7 @@
 package ninja.trek.smartclicker.executor;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.script.Script;
@@ -46,14 +45,14 @@ public class ScriptExecutor {
     public void stop() {
         if (!running) return;
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         // Release any held buttons
-        if (leftHolding && client.options.attackKey.isPressed()) {
-            client.options.attackKey.setPressed(false);
+        if (leftHolding && client.options.keyAttack.isDown()) {
+            client.options.keyAttack.setDown(false);
         }
-        if (rightHolding && client.options.useKey.isPressed()) {
-            client.options.useKey.setPressed(false);
+        if (rightHolding && client.options.keyUse.isDown()) {
+            client.options.keyUse.setDown(false);
         }
 
         this.running = false;
@@ -70,7 +69,7 @@ public class ScriptExecutor {
     public void tick() {
         if (!running) return;
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             stop();
             return;
@@ -85,11 +84,11 @@ public class ScriptExecutor {
         // Release holds if delay is done
         if (holding) {
             if (leftHolding) {
-                client.options.attackKey.setPressed(false);
+                client.options.keyAttack.setDown(false);
                 leftHolding = false;
             }
             if (rightHolding) {
-                client.options.useKey.setPressed(false);
+                client.options.keyUse.setDown(false);
                 rightHolding = false;
             }
             holding = false;
@@ -111,26 +110,26 @@ public class ScriptExecutor {
         currentInstructionIndex++;
     }
 
-    private void executeInstruction(MinecraftClient client, CommandInstruction instruction) {
-        ClientPlayerEntity player = client.player;
+    private void executeInstruction(Minecraft client, CommandInstruction instruction) {
+        LocalPlayer player = client.player;
         if (player == null) return;
 
         switch (instruction.getType()) {
             case LEFT_CLICK -> {
-                client.options.attackKey.setPressed(true);
-                client.options.attackKey.setPressed(false);
+                client.options.keyAttack.setDown(true);
+                client.options.keyAttack.setDown(false);
             }
             case RIGHT_CLICK -> {
-                client.options.useKey.setPressed(true);
-                client.options.useKey.setPressed(false);
+                client.options.keyUse.setDown(true);
+                client.options.keyUse.setDown(false);
             }
             case LEFT_HOLD -> {
-                client.options.attackKey.setPressed(true);
+                client.options.keyAttack.setDown(true);
                 leftHolding = true;
                 holding = true;
             }
             case RIGHT_HOLD -> {
-                client.options.useKey.setPressed(true);
+                client.options.keyUse.setDown(true);
                 rightHolding = true;
                 holding = true;
             }
@@ -138,7 +137,7 @@ public class ScriptExecutor {
                 try {
                     int slot = Integer.parseInt(instruction.getParameter());
                     if (slot >= 0 && slot <= 8) {
-                        player.getInventory().selectedSlot = slot;
+                        player.getInventory().selected = slot;
                     }
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid belt slot: {}", instruction.getParameter());
@@ -147,11 +146,8 @@ public class ScriptExecutor {
             case PAN_MOUSE -> {
                 try {
                     float degrees = Float.parseFloat(instruction.getParameter());
-                    float newYaw = player.getYaw() + degrees;
-                    player.setYaw(newYaw);
-                    if (client.getNetworkHandler() != null) {
-                        player.networkHandler.sendChatCommand(""); // Trigger update
-                    }
+                    float newYaw = player.getYRot() + degrees;
+                    player.setYRot(newYaw);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid pan angle: {}", instruction.getParameter());
                 }
@@ -159,8 +155,8 @@ public class ScriptExecutor {
             case TILT_MOUSE -> {
                 try {
                     float degrees = Float.parseFloat(instruction.getParameter());
-                    float newPitch = player.getPitch() + degrees;
-                    player.setPitch(newPitch);
+                    float newPitch = player.getXRot() + degrees;
+                    player.setXRot(newPitch);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid tilt angle: {}", instruction.getParameter());
                 }
@@ -172,19 +168,19 @@ public class ScriptExecutor {
                     case "S" -> 0.0f;
                     case "E" -> -90.0f;
                     case "W" -> 90.0f;
-                    default -> player.getYaw();
+                    default -> player.getYRot();
                 };
-                player.setYaw(targetYaw);
+                player.setYRot(targetYaw);
             }
             case JUMP -> {
-                if (player.isOnGround()) {
-                    player.jump();
+                if (player.onGround()) {
+                    player.jumpFromGround();
                 }
             }
             case CROUCH -> {
                 String param = instruction.getParameter().toUpperCase();
                 boolean shouldCrouch = param.equals("ON") || param.equals("TRUE");
-                client.options.sneakKey.setPressed(shouldCrouch);
+                client.options.keyShift.setDown(shouldCrouch);
             }
         }
     }

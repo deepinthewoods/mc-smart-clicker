@@ -1,12 +1,12 @@
 package ninja.trek.smartclicker;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import ninja.trek.smartclicker.executor.ScriptExecutor;
 import ninja.trek.smartclicker.script.ScriptManager;
 import ninja.trek.smartclicker.ui.ScriptMenuScreen;
@@ -19,7 +19,7 @@ public class SmartClickerClient implements ClientModInitializer {
 
 	private static ScriptManager scriptManager;
 	private static ScriptExecutor executor;
-	private static KeyBinding menuKeyBinding;
+	private static KeyMapping menuKeyBinding;
 
 	@Override
 	public void onInitializeClient() {
@@ -32,9 +32,9 @@ public class SmartClickerClient implements ClientModInitializer {
 		executor = new ScriptExecutor();
 
 		// Register keybinding for opening menu (default: M key)
-		menuKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+		menuKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.smart-clicker.menu",
-			InputUtil.Type.KEYSYM,
+			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_M,
 			"category.smart-clicker"
 		));
@@ -45,26 +45,26 @@ public class SmartClickerClient implements ClientModInitializer {
 			executor.tick();
 
 			// Check for menu key press
-			while (menuKeyBinding.wasPressed()) {
+			while (menuKeyBinding.consumeClick()) {
 				if (executor.isRunning()) {
 					// Stop script if running
 					executor.stop();
 				} else {
 					// Open menu if not running
-					client.setScreen(new ScriptMenuScreen(client.currentScreen));
+					client.setScreen(new ScriptMenuScreen(client.screen));
 				}
 			}
 
 			// Stop script if player clicks or opens inventory
 			if (executor.isRunning()) {
 				// Check for mouse clicks
-				if (client.options.attackKey.wasPressed() || client.options.useKey.wasPressed()) {
+				if (client.options.keyAttack.consumeClick() || client.options.keyUse.consumeClick()) {
 					executor.stop();
 				}
 
 				// Check if inventory screen is open
-				if (client.currentScreen != null) {
-					String screenClass = client.currentScreen.getClass().getSimpleName();
+				if (client.screen != null) {
+					String screenClass = client.screen.getClass().getSimpleName();
 					if (screenClass.contains("Inventory") || screenClass.contains("Container")) {
 						executor.stop();
 					}
