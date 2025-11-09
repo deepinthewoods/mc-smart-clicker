@@ -12,8 +12,7 @@ public enum CommandType {
     JUMP("Jump", false),
     CROUCH("Crouch", true),
     MOVE("Move", true),
-    SET_YAW("setYaw", true),
-    YAW("yaw", true),
+    TILT_ABSOLUTE("Tilt Absolute", true),
     SWAP_TOOL("swap tool <", true);
 
     private final String displayName;
@@ -39,7 +38,7 @@ public enum CommandType {
             case FACE -> "N";
             case CROUCH -> "ON";
             case MOVE -> "w";
-            case SET_YAW, YAW -> "0.0";
+            case TILT_ABSOLUTE -> "0.0";
             case SWAP_TOOL -> "10";
             default -> "";
         };
