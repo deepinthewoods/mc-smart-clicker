@@ -5,7 +5,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
@@ -25,6 +28,7 @@ public class ScriptEditorScreen extends Screen {
     private static final int COMMAND_BUTTONS_X = 10;
 
     private EditBox nameField;
+    private static List<String> ALL_ITEM_IDS;
 
     public ScriptEditorScreen(Screen parent, Script script) {
         super(Component.literal("Edit Script"));
@@ -35,6 +39,13 @@ public class ScriptEditorScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+
+        if (ALL_ITEM_IDS == null) {
+            ALL_ITEM_IDS = BuiltInRegistries.ITEM.keySet().stream()
+                .map(ResourceLocation::toString)
+                .sorted()
+                .toList();
+        }
 
         // Name field at top
         nameField = new EditBox(this.font, this.width / 2 - 100, 30, 150, 20, Component.literal("Script Name"));
@@ -109,6 +120,12 @@ public class ScriptEditorScreen extends Screen {
                 this.addRenderableWidget(row.paramLabel);
             }
             this.addRenderableWidget(row.paramField);
+            if (row.amountLabel != null) {
+                this.addRenderableWidget(row.amountLabel);
+            }
+            if (row.amountField != null) {
+                this.addRenderableWidget(row.amountField);
+            }
             this.addRenderableWidget(row.delaySlider);
             y += ROW_HEIGHT;
         }
@@ -125,6 +142,12 @@ public class ScriptEditorScreen extends Screen {
                 this.removeWidget(row.paramLabel);
             }
             this.removeWidget(row.paramField);
+            if (row.amountLabel != null) {
+                this.removeWidget(row.amountLabel);
+            }
+            if (row.amountField != null) {
+                this.removeWidget(row.amountField);
+            }
             this.removeWidget(row.delaySlider);
         }
         commandRows.clear();
@@ -136,6 +159,19 @@ public class ScriptEditorScreen extends Screen {
         // Render a simple semi-transparent background without blur to avoid the "Can only blur once per frame" error
         graphics.fill(0, 0, this.width, this.height, 0xC0101010);
         super.render(graphics, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent keyEvent) {
+        if (keyEvent.isCycleFocus() && !keyEvent.hasShiftDown()) {
+            for (CommandRow row : commandRows) {
+                if (row.canApplyAutocomplete()) {
+                    row.applyAutocomplete();
+                    return true;
+                }
+            }
+        }
+        return super.keyPressed(keyEvent);
     }
 
     @Override
@@ -155,8 +191,11 @@ public class ScriptEditorScreen extends Screen {
         public final Button downButton;
         public final Button commandTypeLabel;
         public final Button paramLabel;
+        public final Button amountLabel;
         public final AbstractSliderButton delaySlider;
         public final EditBox paramField;
+        public final EditBox amountField;
+        private String autocompleteTarget;
 
         public CommandRow(CommandInstruction instruction, int index, int y) {
             this.instruction = instruction;
@@ -209,11 +248,12 @@ public class ScriptEditorScreen extends Screen {
 
             // Parameter field
             this.paramField = new EditBox(ScriptEditorScreen.this.font, x, y + 2, 80, 16, Component.literal("Param"));
-            this.paramField.setMaxLength(20);
+            this.paramField.setMaxLength(isItemIdParam(instruction.getType()) ? 128 : 20);
             this.paramField.setValue(instruction.getParameter());
             this.paramField.setResponder(text -> {
                 instruction.setParameter(text);
                 SmartClickerClient.getScriptManager().saveScript(script);
+                updateAutocomplete();
             });
             if (!instruction.getType().hasParameter()) {
                 this.paramField.setEditable(false);
@@ -221,8 +261,34 @@ public class ScriptEditorScreen extends Screen {
             }
             x += 82;
 
+            updateAutocomplete();
+
+            // Amount field (BUY/SELL only)
+            if (instruction.getType() == CommandType.BUY || instruction.getType() == CommandType.SELL) {
+                this.amountLabel = Button.builder(Component.literal("Amt:"), button -> {})
+                    .bounds(x, y, 32, 20).build();
+                this.amountLabel.active = false;
+                x += 34;
+
+                this.amountField = new EditBox(ScriptEditorScreen.this.font, x, y + 2, 40, 16, Component.literal("Amt"));
+                this.amountField.setMaxLength(4);
+                this.amountField.setFilter(text -> text.isEmpty() || text.chars().allMatch(Character::isDigit));
+                this.amountField.setValue(Integer.toString(instruction.getAmount()));
+                this.amountField.setResponder(text -> {
+                    int amount = text == null || text.isEmpty() ? 0 : Integer.parseInt(text);
+                    instruction.setAmount(amount);
+                    SmartClickerClient.getScriptManager().saveScript(script);
+                });
+                x += 42;
+            } else {
+                this.amountLabel = null;
+                this.amountField = null;
+            }
+
             // Delay slider
-            int delayX = COMMAND_BUTTONS_X + 310;
+            int paletteLeft = ScriptEditorScreen.this.width - 120;
+            int maxDelayX = Math.max(COMMAND_BUTTONS_X, paletteLeft - 10 - 80);
+            int delayX = Math.min(x + 2, maxDelayX);
             this.delaySlider = new AbstractSliderButton(delayX, y, 80, 20,
                 Component.literal("Delay: " + instruction.getPostDelay() + "t"),
                 (instruction.getPostDelay() - 1) / 49.0) {
@@ -241,5 +307,62 @@ public class ScriptEditorScreen extends Screen {
                 }
             };
         }
+
+        private void updateAutocomplete() {
+            if (!isItemIdParam(instruction.getType())) {
+                this.autocompleteTarget = null;
+                this.paramField.setSuggestion(null);
+                return;
+            }
+
+            String current = this.paramField.getValue();
+            String normalized = current == null ? "" : current.trim().toLowerCase();
+            if (normalized.isEmpty()) {
+                this.autocompleteTarget = "minecraft:";
+                this.paramField.setSuggestion("minecraft:");
+                return;
+            }
+
+            String best = findBestItemIdMatch(normalized);
+            this.autocompleteTarget = best;
+            if (best != null && best.startsWith(normalized) && best.length() > normalized.length()) {
+                this.paramField.setSuggestion(best.substring(normalized.length()));
+            } else {
+                this.paramField.setSuggestion(null);
+            }
+        }
+
+        private boolean canApplyAutocomplete() {
+            if (!isItemIdParam(instruction.getType())) return false;
+            if (!this.paramField.isFocused()) return false;
+            if (this.autocompleteTarget == null) return false;
+            String current = this.paramField.getValue();
+            if (current == null) return false;
+            String normalized = current.trim().toLowerCase();
+            return this.autocompleteTarget.startsWith(normalized) && !this.autocompleteTarget.equals(normalized);
+        }
+
+        private void applyAutocomplete() {
+            if (!canApplyAutocomplete()) return;
+            this.paramField.setValue(this.autocompleteTarget);
+            this.paramField.moveCursorToEnd(false);
+        }
+    }
+
+    private static boolean isItemIdParam(CommandType type) {
+        return type == CommandType.BUY || type == CommandType.SELL;
+    }
+
+    private static String findBestItemIdMatch(String normalized) {
+        if (ALL_ITEM_IDS == null || ALL_ITEM_IDS.isEmpty()) return null;
+
+        // Prefer prefix matches, then substring matches.
+        for (String id : ALL_ITEM_IDS) {
+            if (id.startsWith(normalized)) return id;
+        }
+        for (String id : ALL_ITEM_IDS) {
+            if (id.contains(normalized)) return id;
+        }
+        return null;
     }
 }

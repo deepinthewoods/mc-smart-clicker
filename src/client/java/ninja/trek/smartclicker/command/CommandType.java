@@ -13,7 +13,9 @@ public enum CommandType {
     CROUCH("Crouch", true),
     MOVE("Move", true),
     TILT_ABSOLUTE("Tilt Absolute", true),
-    SWAP_TOOL("swap tool <", true);
+    SWAP_TOOL("swap tool <", true),
+    BUY("Buy", true),
+    SELL("Sell", true);
 
     private final String displayName;
     private final boolean hasParameter;
@@ -40,6 +42,7 @@ public enum CommandType {
             case MOVE -> "w";
             case TILT_ABSOLUTE -> "0.0";
             case SWAP_TOOL -> "10";
+            case BUY, SELL -> "minecraft:";
             default -> "";
         };
     }

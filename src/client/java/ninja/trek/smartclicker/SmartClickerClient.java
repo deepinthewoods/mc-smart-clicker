@@ -7,6 +7,8 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
+import ninja.trek.smartclicker.SmartClicker;
 import ninja.trek.smartclicker.executor.ScriptExecutor;
 import ninja.trek.smartclicker.script.ScriptManager;
 import ninja.trek.smartclicker.ui.ScriptMenuScreen;
@@ -16,6 +18,9 @@ import org.slf4j.LoggerFactory;
 
 public class SmartClickerClient implements ClientModInitializer {
 	public static final Logger LOGGER = LoggerFactory.getLogger("SmartClicker");
+
+	private static final KeyMapping.Category KEY_CATEGORY =
+		KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(SmartClicker.MOD_ID, "main"));
 
 	private static ScriptManager scriptManager;
 	private static ScriptExecutor executor;
@@ -36,7 +41,7 @@ public class SmartClickerClient implements ClientModInitializer {
 			"key.smart-clicker.menu",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_M,
-			KeyMapping.Category.MISC
+			KEY_CATEGORY
 		));
 
 		// Register tick event for script execution
