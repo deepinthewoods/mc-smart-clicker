@@ -55,8 +55,9 @@ public class ScriptExecutor {
         // Initialize reflection field for inventory selection
         if (inventorySelectedField == null) {
             try {
-                inventorySelectedField = Class.forName("net.minecraft.world.entity.player.Inventory").getDeclaredField("selected");
+                inventorySelectedField = Inventory.class.getDeclaredField("selected");
                 inventorySelectedField.setAccessible(true);
+                LOGGER.info("Successfully initialized inventory reflection field");
             } catch (Exception e) {
                 LOGGER.error("Failed to initialize inventory selected field reflection", e);
             }
@@ -173,23 +174,28 @@ public class ScriptExecutor {
             return;
         }
 
-        // Release holds if delay is done
-        if (holding) {
-            if (leftHolding) {
-                client.options.keyAttack.setDown(false);
-                leftHolding = false;
-            }
-            if (rightHolding) {
-                client.options.keyUse.setDown(false);
-                rightHolding = false;
-            }
-            holding = false;
-        }
-
         // Loop back to beginning when reaching the end
         List<CommandInstruction> instructions = currentScript.getInstructions();
         if (currentInstructionIndex >= instructions.size()) {
             currentInstructionIndex = 0;
+        }
+
+        // Check next instruction to see if we should maintain holds
+        CommandInstruction nextInstruction = instructions.get(currentInstructionIndex);
+        boolean nextIsLeftHold = nextInstruction.getType() == CommandType.LEFT_HOLD;
+        boolean nextIsRightHold = nextInstruction.getType() == CommandType.RIGHT_HOLD;
+
+        // Release holds if delay is done, but only if next instruction isn't the same hold
+        if (holding) {
+            if (leftHolding && !nextIsLeftHold) {
+                client.options.keyAttack.setDown(false);
+                leftHolding = false;
+            }
+            if (rightHolding && !nextIsRightHold) {
+                client.options.keyUse.setDown(false);
+                rightHolding = false;
+            }
+            holding = leftHolding || rightHolding;
         }
 
         // Continue any in-progress trade task.
@@ -236,12 +242,16 @@ public class ScriptExecutor {
                 rightClicking = true;
             }
             case LEFT_HOLD -> {
-                client.options.keyAttack.setDown(true);
+                if (!leftHolding) {
+                    client.options.keyAttack.setDown(true);
+                }
                 leftHolding = true;
                 holding = true;
             }
             case RIGHT_HOLD -> {
-                client.options.keyUse.setDown(true);
+                if (!rightHolding) {
+                    client.options.keyUse.setDown(true);
+                }
                 rightHolding = true;
                 holding = true;
             }
