@@ -19,17 +19,18 @@ import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
+import ninja.trek.smartclicker.mixin.client.InventoryAccessor;
 import ninja.trek.smartclicker.script.Script;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ScriptExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScriptExecutor.class);
-    private static Field inventorySelectedField = null;
 
     private Script currentScript;
     private int currentInstructionIndex;
@@ -48,20 +49,12 @@ public class ScriptExecutor {
     private TradeTask tradeTask;
     private int tradeTaskPostDelay;
 
+    // Track what tool type should be in each hotbar slot (for SWAP_TOOL)
+    private final Map<Integer, net.minecraft.world.item.Item> expectedToolTypePerSlot = new HashMap<>();
+
     public ScriptExecutor() {
         this.running = false;
         this.holding = false;
-
-        // Initialize reflection field for inventory selection
-        if (inventorySelectedField == null) {
-            try {
-                inventorySelectedField = Inventory.class.getDeclaredField("selected");
-                inventorySelectedField.setAccessible(true);
-                LOGGER.info("Successfully initialized inventory reflection field");
-            } catch (Exception e) {
-                LOGGER.error("Failed to initialize inventory selected field reflection", e);
-            }
-        }
     }
 
     public void startScript(Script script) {
@@ -258,13 +251,11 @@ public class ScriptExecutor {
             case BELT_SELECT -> {
                 try {
                     int slot = Integer.parseInt(instruction.getParameter());
-                    if (slot >= 0 && slot <= 8 && inventorySelectedField != null) {
-                        inventorySelectedField.set(player.getInventory(), slot);
+                    if (slot >= 0 && slot <= 8) {
+                        ((InventoryAccessor) player.getInventory()).setSelected(slot);
                     }
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid belt slot: {}", instruction.getParameter());
-                } catch (Exception e) {
-                    LOGGER.error("Failed to set inventory slot", e);
                 }
             }
             case PAN_MOUSE -> {
@@ -341,16 +332,37 @@ public class ScriptExecutor {
                     int durabilityThreshold = Integer.parseInt(instruction.getParameter());
                     Inventory inventory = player.getInventory();
 
-                    // Get current hotbar slot using reflection
-                    if (inventorySelectedField == null) {
-                        LOGGER.error("Cannot swap tool: inventory reflection not initialized");
-                        break;
-                    }
-
-                    int currentSlot = (int) inventorySelectedField.get(inventory);
+                    // Get current hotbar slot
+                    int currentSlot = ((InventoryAccessor) inventory).getSelected();
                     ItemStack currentItem = inventory.getItem(currentSlot);
 
-                    // Only proceed if there's an item and it's damageable
+                    // Step 1: Remember what tool type should be in this slot
+                    if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                        expectedToolTypePerSlot.put(currentSlot, currentItem.getItem());
+                    }
+
+                    // Step 2: Check if current item is the expected tool type, restore if not
+                    net.minecraft.world.item.Item expectedTool = expectedToolTypePerSlot.get(currentSlot);
+                    if (expectedTool != null && (currentItem.isEmpty() || currentItem.getItem() != expectedTool)) {
+                        // Current item is not the expected tool, try to restore it from inventory
+                        for (int i = 9; i < 36; i++) {
+                            ItemStack candidateItem = inventory.getItem(i);
+                            if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedTool) {
+                                // Found expected tool in inventory, swap it in
+                                inventory.setItem(currentSlot, candidateItem.copy());
+                                if (!currentItem.isEmpty()) {
+                                    inventory.setItem(i, currentItem.copy());
+                                } else {
+                                    inventory.setItem(i, ItemStack.EMPTY);
+                                }
+                                LOGGER.info("Restored {} to slot {}", expectedTool, currentSlot);
+                                currentItem = inventory.getItem(currentSlot); // Update reference
+                                break;
+                            }
+                        }
+                    }
+
+                    // Step 3: Check if current tool has low durability and needs swapping
                     if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
                         int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
 
@@ -369,8 +381,8 @@ public class ScriptExecutor {
                                     // Swap if candidate has more durability than threshold
                                     if (candidateDurability > durabilityThreshold) {
                                         // Perform swap
-                                        inventory.setItem(currentSlot, candidateItem);
-                                        inventory.setItem(i, currentItem);
+                                        inventory.setItem(currentSlot, candidateItem.copy());
+                                        inventory.setItem(i, currentItem.copy());
                                         swapped = true;
                                         LOGGER.info("Swapped tool in slot {} with inventory slot {}", currentSlot, i);
                                         break;
@@ -384,7 +396,7 @@ public class ScriptExecutor {
                                     ItemStack slotItem = inventory.getItem(i);
                                     if (slotItem.isEmpty()) {
                                         // Move current tool to empty slot
-                                        inventory.setItem(i, currentItem);
+                                        inventory.setItem(i, currentItem.copy());
                                         inventory.setItem(currentSlot, ItemStack.EMPTY);
                                         LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
                                         break;

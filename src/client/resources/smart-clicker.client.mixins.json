@@ -3,7 +3,8 @@
 	"package": "ninja.trek.smartclicker.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"ExampleClientMixin",
+		"InventoryAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
