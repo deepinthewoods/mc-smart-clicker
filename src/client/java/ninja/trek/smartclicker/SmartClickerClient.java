@@ -63,7 +63,10 @@ public class SmartClickerClient implements ClientModInitializer {
 			// Stop script if player clicks or opens inventory
 			if (executor.isRunning()) {
 				// Check for mouse clicks
-				if (client.options.keyAttack.consumeClick() || client.options.keyUse.consumeClick()) {
+				boolean attackClick = client.options.keyAttack.consumeClick();
+				boolean useClick = client.options.keyUse.consumeClick();
+				if ((attackClick && !executor.shouldIgnoreAttackClick())
+					|| (useClick && !executor.shouldIgnoreUseClick())) {
 					executor.stop();
 				}
 

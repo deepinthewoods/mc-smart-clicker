@@ -36,7 +36,6 @@ public class ScriptExecutor {
     private int currentInstructionIndex;
     private int delayTicks;
     private boolean running;
-    private boolean holding;
     private boolean leftHolding;
     private boolean rightHolding;
     private boolean leftClicking;
@@ -45,6 +44,8 @@ public class ScriptExecutor {
     private boolean movingBack;
     private boolean movingLeft;
     private boolean movingRight;
+    private boolean ignoreAttackClickThisTick;
+    private boolean ignoreUseClickThisTick;
 
     private TradeTask tradeTask;
     private int tradeTaskPostDelay;
@@ -54,7 +55,6 @@ public class ScriptExecutor {
 
     public ScriptExecutor() {
         this.running = false;
-        this.holding = false;
     }
 
     public void startScript(Script script) {
@@ -67,7 +67,6 @@ public class ScriptExecutor {
         this.currentInstructionIndex = 0;
         this.delayTicks = 0;
         this.running = true;
-        this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
         this.leftClicking = false;
@@ -76,6 +75,8 @@ public class ScriptExecutor {
         this.movingBack = false;
         this.movingLeft = false;
         this.movingRight = false;
+        this.ignoreAttackClickThisTick = false;
+        this.ignoreUseClickThisTick = false;
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -107,7 +108,6 @@ public class ScriptExecutor {
         }
 
         this.running = false;
-        this.holding = false;
         this.leftHolding = false;
         this.rightHolding = false;
         this.leftClicking = false;
@@ -124,6 +124,14 @@ public class ScriptExecutor {
         return running;
     }
 
+    public boolean shouldIgnoreAttackClick() {
+        return ignoreAttackClickThisTick;
+    }
+
+    public boolean shouldIgnoreUseClick() {
+        return ignoreUseClickThisTick;
+    }
+
     public void tick() {
         if (!running) return;
 
@@ -132,6 +140,9 @@ public class ScriptExecutor {
             stop();
             return;
         }
+
+        ignoreAttackClickThisTick = false;
+        ignoreUseClickThisTick = false;
 
         // Release any clicks from previous tick (clicks are always 1 tick duration)
         if (leftClicking) {
@@ -173,24 +184,6 @@ public class ScriptExecutor {
             currentInstructionIndex = 0;
         }
 
-        // Check next instruction to see if we should maintain holds
-        CommandInstruction nextInstruction = instructions.get(currentInstructionIndex);
-        boolean nextIsLeftHold = nextInstruction.getType() == CommandType.LEFT_HOLD;
-        boolean nextIsRightHold = nextInstruction.getType() == CommandType.RIGHT_HOLD;
-
-        // Release holds if delay is done, but only if next instruction isn't the same hold
-        if (holding) {
-            if (leftHolding && !nextIsLeftHold) {
-                client.options.keyAttack.setDown(false);
-                leftHolding = false;
-            }
-            if (rightHolding && !nextIsRightHold) {
-                client.options.keyUse.setDown(false);
-                rightHolding = false;
-            }
-            holding = leftHolding || rightHolding;
-        }
-
         // Continue any in-progress trade task.
         if (tradeTask != null) {
             if (tradeTask.tick(client)) {
@@ -229,24 +222,26 @@ public class ScriptExecutor {
             case LEFT_CLICK -> {
                 client.options.keyAttack.setDown(true);
                 leftClicking = true;
+                ignoreAttackClickThisTick = true;
             }
             case RIGHT_CLICK -> {
                 client.options.keyUse.setDown(true);
                 rightClicking = true;
+                ignoreUseClickThisTick = true;
             }
             case LEFT_HOLD -> {
                 if (!leftHolding) {
                     client.options.keyAttack.setDown(true);
+                    ignoreAttackClickThisTick = true;
                 }
                 leftHolding = true;
-                holding = true;
             }
             case RIGHT_HOLD -> {
                 if (!rightHolding) {
                     client.options.keyUse.setDown(true);
+                    ignoreUseClickThisTick = true;
                 }
                 rightHolding = true;
-                holding = true;
             }
             case BELT_SELECT -> {
                 try {
