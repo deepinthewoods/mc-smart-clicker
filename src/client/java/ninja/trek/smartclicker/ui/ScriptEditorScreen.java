@@ -127,6 +127,7 @@ public class ScriptEditorScreen extends Screen {
                 this.addRenderableWidget(row.amountField);
             }
             this.addRenderableWidget(row.delaySlider);
+            this.addRenderableWidget(row.setDelayButton);
             y += ROW_HEIGHT;
         }
     }
@@ -149,6 +150,7 @@ public class ScriptEditorScreen extends Screen {
                 this.removeWidget(row.amountField);
             }
             this.removeWidget(row.delaySlider);
+            this.removeWidget(row.setDelayButton);
         }
         commandRows.clear();
         buildCommandList();
@@ -193,6 +195,7 @@ public class ScriptEditorScreen extends Screen {
         public final Button paramLabel;
         public final Button amountLabel;
         public final AbstractSliderButton delaySlider;
+        public final Button setDelayButton;
         public final EditBox paramField;
         public final EditBox amountField;
         private String autocompleteTarget;
@@ -287,7 +290,7 @@ public class ScriptEditorScreen extends Screen {
 
             // Delay slider
             int paletteLeft = ScriptEditorScreen.this.width - 120;
-            int maxDelayX = Math.max(COMMAND_BUTTONS_X, paletteLeft - 10 - 80);
+            int maxDelayX = Math.max(COMMAND_BUTTONS_X, paletteLeft - 10 - 80 - 35);
             int delayX = Math.min(x + 2, maxDelayX);
             this.delaySlider = new AbstractSliderButton(delayX, y, 80, 20,
                 Component.literal("Delay: " + instruction.getPostDelay() + "t"),
@@ -306,6 +309,18 @@ public class ScriptEditorScreen extends Screen {
                     SmartClickerClient.getScriptManager().saveScript(script);
                 }
             };
+
+            // Set delay button
+            this.setDelayButton = Button.builder(Component.literal("Set"), button -> {
+                minecraft.setScreen(new SetDelayDialog(ScriptEditorScreen.this, instruction.getPostDelay(), newDelay -> {
+                    instruction.setPostDelay(newDelay);
+                    SmartClickerClient.getScriptManager().saveScript(script);
+                    // Update the slider to reflect the new value
+                    double sliderValue = Math.min((newDelay - 1) / 49.0, 1.0);
+                    delaySlider.value = sliderValue;
+                    delaySlider.updateMessage();
+                }));
+            }).bounds(delayX + 82, y, 30, 20).build();
         }
 
         private void updateAutocomplete() {

@@ -6,7 +6,7 @@ import java.lang.reflect.Type;
 public class CommandInstruction {
     private CommandType type;
     private String parameter;
-    private int postDelay; // in game ticks (1-50)
+    private int postDelay; // in game ticks (minimum 1, no maximum)
     private int amount; // trade count for BUY/SELL; 0 = as many as possible
 
     public CommandInstruction(CommandType type, String parameter, int postDelay) {
@@ -16,7 +16,7 @@ public class CommandInstruction {
     public CommandInstruction(CommandType type, String parameter, int postDelay, int amount) {
         this.type = type;
         this.parameter = parameter;
-        this.postDelay = Math.max(1, Math.min(50, postDelay));
+        this.postDelay = Math.max(1, postDelay);
         setAmount(amount);
     }
 
@@ -41,7 +41,7 @@ public class CommandInstruction {
     }
 
     public void setPostDelay(int postDelay) {
-        this.postDelay = Math.max(1, Math.min(50, postDelay));
+        this.postDelay = Math.max(1, postDelay);
     }
 
     public int getAmount() {
