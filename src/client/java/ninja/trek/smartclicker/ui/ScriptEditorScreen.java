@@ -184,6 +184,33 @@ public class ScriptEditorScreen extends Screen {
         }
     }
 
+    private class CustomSlider extends AbstractSliderButton {
+        private final CommandInstruction instruction;
+
+        public CustomSlider(int x, int y, int width, int height, Component message, double value, CommandInstruction instruction) {
+            super(x, y, width, height, message, value);
+            this.instruction = instruction;
+        }
+
+        @Override
+        protected void updateMessage() {
+            int delay = (int) Math.round(this.value * 49) + 1;
+            this.setMessage(Component.literal("Delay: " + delay + "t"));
+        }
+
+        @Override
+        protected void applyValue() {
+            int delay = (int) Math.round(this.value * 49) + 1;
+            instruction.setPostDelay(delay);
+            SmartClickerClient.getScriptManager().saveScript(script);
+        }
+
+        public void setSliderValue(double newValue) {
+            this.value = newValue;
+            this.updateMessage();
+        }
+    }
+
     private class CommandRow {
         private final CommandInstruction instruction;
         private final int index;
@@ -194,7 +221,7 @@ public class ScriptEditorScreen extends Screen {
         public final Button commandTypeLabel;
         public final Button paramLabel;
         public final Button amountLabel;
-        public final AbstractSliderButton delaySlider;
+        public final CustomSlider delaySlider;
         public final Button setDelayButton;
         public final EditBox paramField;
         public final EditBox amountField;
@@ -292,23 +319,10 @@ public class ScriptEditorScreen extends Screen {
             int paletteLeft = ScriptEditorScreen.this.width - 120;
             int maxDelayX = Math.max(COMMAND_BUTTONS_X, paletteLeft - 10 - 80 - 35);
             int delayX = Math.min(x + 2, maxDelayX);
-            this.delaySlider = new AbstractSliderButton(delayX, y, 80, 20,
+            this.delaySlider = new CustomSlider(delayX, y, 80, 20,
                 Component.literal("Delay: " + instruction.getPostDelay() + "t"),
-                (instruction.getPostDelay() - 1) / 49.0) {
-
-                @Override
-                protected void updateMessage() {
-                    int delay = (int) Math.round(this.value * 49) + 1;
-                    this.setMessage(Component.literal("Delay: " + delay + "t"));
-                }
-
-                @Override
-                protected void applyValue() {
-                    int delay = (int) Math.round(this.value * 49) + 1;
-                    instruction.setPostDelay(delay);
-                    SmartClickerClient.getScriptManager().saveScript(script);
-                }
-            };
+                (instruction.getPostDelay() - 1) / 49.0,
+                instruction);
 
             // Set delay button
             this.setDelayButton = Button.builder(Component.literal("Set"), button -> {
@@ -317,8 +331,7 @@ public class ScriptEditorScreen extends Screen {
                     SmartClickerClient.getScriptManager().saveScript(script);
                     // Update the slider to reflect the new value
                     double sliderValue = Math.min((newDelay - 1) / 49.0, 1.0);
-                    delaySlider.value = sliderValue;
-                    delaySlider.updateMessage();
+                    delaySlider.setSliderValue(sliderValue);
                 }));
             }).bounds(delayX + 82, y, 30, 20).build();
         }

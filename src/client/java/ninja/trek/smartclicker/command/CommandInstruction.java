@@ -7,7 +7,7 @@ public class CommandInstruction {
     private CommandType type;
     private String parameter;
     private int postDelay; // in game ticks (minimum 1, no maximum)
-    private int amount; // trade count for BUY/SELL; 0 = as many as possible
+    private int amount; // trade count for BUY/SELL; 0 = until out of stock, -1 = until 1 trade left
 
     public CommandInstruction(CommandType type, String parameter, int postDelay) {
         this(type, parameter, postDelay, getDefaultAmount(type));
@@ -49,7 +49,12 @@ public class CommandInstruction {
     }
 
     public void setAmount(int amount) {
-        this.amount = Math.max(0, Math.min(9999, amount));
+        // Allow -1 as a special value (trade until 1 left), otherwise clamp to [0, 9999]
+        if (amount == -1) {
+            this.amount = -1;
+        } else {
+            this.amount = Math.max(0, Math.min(9999, amount));
+        }
     }
 
     public boolean hasAmountSetting() {

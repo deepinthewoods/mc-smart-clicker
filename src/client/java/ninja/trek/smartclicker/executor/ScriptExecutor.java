@@ -706,6 +706,27 @@ public class ScriptExecutor {
                         }
                     }
 
+                    // For targetTrades == -1, stop if this trade would leave only 1 use remaining
+                    if (targetTrades == -1) {
+                        int remainingAfterThisTrade = offer.getMaxUses() - offer.getUses() - 1;
+                        if (remainingAfterThisTrade <= 1) {
+                            // Perform this final trade, then stop
+                            if (!clearPaymentSlots(menu)) {
+                                LOGGER.error("Not enough inventory space to clear payment slots for {}", mode);
+                                closeScreen(client, player);
+                                yield true;
+                            }
+                            selectOffer(client, menu, selectedOfferIndex);
+                            if (fillPaymentSlotsExact(menu, offer) && offer.satisfiedBy(menu.getSlot(0).getItem(), menu.getSlot(1).getItem())) {
+                                if (client.gameMode != null) {
+                                    client.gameMode.handleInventoryMouseClick(menu.containerId, 2, 0, ClickType.QUICK_MOVE, player);
+                                }
+                            }
+                            closeScreen(client, player);
+                            yield true;
+                        }
+                    }
+
                     if (!clearPaymentSlots(menu)) {
                         LOGGER.error("Not enough inventory space to clear payment slots for {}", mode);
                         closeScreen(client, player);
@@ -729,10 +750,16 @@ public class ScriptExecutor {
                         client.gameMode.handleInventoryMouseClick(menu.containerId, 2, 0, ClickType.QUICK_MOVE, player);
                     }
                     tradesCompleted++;
+
+                    // Check if we should stop trading
                     if (targetTrades > 0 && tradesCompleted >= targetTrades) {
+                        // Stop after specific number of trades
                         closeScreen(client, player);
                         yield true;
                     }
+                    // targetTrades == 0 means continue until out of stock (handled by isOutOfStock check)
+                    // targetTrades == -1 means continue until 1 trade left (handled above before the trade)
+
                     actionCooldown = ACTION_COOLDOWN_TICKS;
                     yield false;
                 }

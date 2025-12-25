@@ -4,7 +4,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 
@@ -126,20 +128,20 @@ public class SetDelayDialog extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent keyEvent) {
         // Enter key confirms
-        if (keyCode == 257) { // GLFW_KEY_ENTER
+        if (keyEvent.key() == GLFW.GLFW_KEY_ENTER) {
             if (validateAndApply()) {
                 minecraft.setScreen(parent);
                 return true;
             }
         }
         // Escape key cancels
-        if (keyCode == 256) { // GLFW_KEY_ESCAPE
+        if (keyEvent.key() == GLFW.GLFW_KEY_ESCAPE) {
             minecraft.setScreen(parent);
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyEvent);
     }
 
     @Override
