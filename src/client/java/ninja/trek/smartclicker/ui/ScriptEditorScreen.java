@@ -29,6 +29,8 @@ public class ScriptEditorScreen extends Screen {
     private static final int COMMAND_BUTTONS_X = 10;
 
     private EditBox nameField;
+    private boolean recordMouseMovements = false;
+    private Button recordMouseToggle;
     private static List<String> ALL_ITEM_IDS;
 
     public ScriptEditorScreen(Screen parent, Script script) {
@@ -66,12 +68,22 @@ public class ScriptEditorScreen extends Screen {
             onClose();
         }).bounds(this.width / 2 + 120, 30, 60, 20).build());
 
+        // Record Mouse Movements toggle button
+        this.recordMouseToggle = Button.builder(
+            Component.literal("Mouse: " + (recordMouseMovements ? "ON" : "OFF")),
+            button -> {
+                recordMouseMovements = !recordMouseMovements;
+                button.setMessage(Component.literal("Mouse: " + (recordMouseMovements ? "ON" : "OFF")));
+            }
+        ).bounds(this.width / 2 + 185, 10, 80, 20).build();
+        this.addRenderableWidget(recordMouseToggle);
+
         // Record button
         this.addRenderableWidget(Button.builder(Component.literal("Record"), button -> {
             RecordingManager recordingManager = SmartClickerClient.getRecordingManager();
-            recordingManager.startRecording(script);
+            recordingManager.startRecording(script, recordMouseMovements);
             onClose(); // Close the UI so player can perform actions
-        }).bounds(this.width / 2 + 185, 30, 60, 20).build());
+        }).bounds(this.width / 2 + 270, 10, 60, 20).build());
 
         // Back button
         this.addRenderableWidget(Button.builder(Component.literal("Back"), button -> {

@@ -51,7 +51,14 @@ public class RecordingManager {
     // Track trade state
     private final java.util.Map<Integer, Integer> lastTradeUses = new java.util.HashMap<>();
 
-    public void startRecording(Script script) {
+    // Track mouse movement recording
+    private boolean recordMouseMovements = false;
+    private float lastSavedYaw = 0.0f;
+    private float lastSavedPitch = 0.0f;
+    private boolean mousePositionChanged = false;
+    private boolean wasStationary = true;
+
+    public void startRecording(Script script, boolean recordMouseMovements) {
         if (script == null) {
             LOGGER.error("Cannot start recording with null script");
             return;
@@ -74,7 +81,17 @@ public class RecordingManager {
         this.lastHotbarSlot = -1;
         this.lastTradeUses.clear();
 
-        LOGGER.info("Started recording for script: {}", script.getName());
+        // Initialize mouse movement recording
+        this.recordMouseMovements = recordMouseMovements;
+        this.mousePositionChanged = false;
+        this.wasStationary = true;
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null) {
+            this.lastSavedYaw = client.player.getYRot();
+            this.lastSavedPitch = client.player.getXRot();
+        }
+
+        LOGGER.info("Started recording for script: {} (Record Mouse: {})", script.getName(), recordMouseMovements);
     }
 
     public void stopRecording() {
@@ -101,6 +118,9 @@ public class RecordingManager {
             rightKeyDown = false;
         }
 
+        // Save any pending mouse position before stopping
+        savePendingMousePosition();
+
         // Add all recorded commands to the script
         for (CommandInstruction instruction : recordedCommands) {
             targetScript.addInstruction(instruction);
@@ -124,7 +144,45 @@ public class RecordingManager {
     public void tick(Minecraft client) {
         if (!recording || client.player == null) return;
 
+        // Stop recording if player opens a screen (ESC/menu)
+        if (client.screen != null) {
+            LOGGER.info("Screen detected, stopping recording");
+            stopRecording();
+            return;
+        }
+
         long currentTick = getCurrentTick();
+
+        // Handle mouse movement recording
+        if (recordMouseMovements) {
+            float currentYaw = client.player.getYRot();
+            float currentPitch = client.player.getXRot();
+            boolean isStationary = isPlayerStationary(client);
+
+            if (isStationary) {
+                // Player is stationary - allow mouse movement
+                // Check if mouse position has changed
+                float yawDiff = Math.abs(currentYaw - lastSavedYaw);
+                float pitchDiff = Math.abs(currentPitch - lastSavedPitch);
+
+                // Account for yaw wrapping (359.9 -> 0.1 should be small diff)
+                if (yawDiff > 180.0f) {
+                    yawDiff = 360.0f - yawDiff;
+                }
+
+                if (yawDiff > 0.01f || pitchDiff > 0.01f) {
+                    mousePositionChanged = true;
+                }
+
+                wasStationary = true;
+            } else {
+                // Player is non-stationary - freeze camera
+                client.player.setYRot(lastSavedYaw);
+                client.player.setXRot(lastSavedPitch);
+
+                wasStationary = false;
+            }
+        }
 
         // Record left mouse button
         recordLeftMouse(client, currentTick);
@@ -317,6 +375,9 @@ public class RecordingManager {
     }
 
     private void addCommand(CommandType type, String parameter, int delay) {
+        // Save pending mouse position before adding any other command
+        savePendingMousePosition();
+
         // Calculate the delay since the last command
         long currentTick = getCurrentTick();
         int postDelay = (int) (currentTick - lastCommandTick);
@@ -336,11 +397,92 @@ public class RecordingManager {
         LOGGER.debug("Recorded command: {} {} (delay: {})", type.getDisplayName(), parameter, delay);
     }
 
+    /**
+     * Saves the current mouse position as TILT_ABSOLUTE and PAN_ABSOLUTE commands
+     * if the mouse position has changed since the last save.
+     */
+    private void savePendingMousePosition() {
+        if (!recordMouseMovements || !mousePositionChanged) {
+            return;
+        }
+
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null) {
+            return;
+        }
+
+        float currentYaw = client.player.getYRot();
+        float currentPitch = client.player.getXRot();
+
+        // Calculate the delay since the last command
+        long currentTick = getCurrentTick();
+        int postDelay = (int) (currentTick - lastCommandTick);
+        if (postDelay < 1) postDelay = 1;
+
+        // Set the delay on the previous command if it exists
+        if (!recordedCommands.isEmpty()) {
+            CommandInstruction lastCommand = recordedCommands.get(recordedCommands.size() - 1);
+            lastCommand.setPostDelay(postDelay);
+        }
+
+        // Add TILT_ABSOLUTE command
+        CommandInstruction tiltInstruction = new CommandInstruction(
+            CommandType.TILT_ABSOLUTE,
+            String.format("%.2f", currentPitch),
+            1
+        );
+        recordedCommands.add(tiltInstruction);
+        lastCommandTick = currentTick;
+
+        // Add PAN_ABSOLUTE command (with minimal delay since they happen together)
+        CommandInstruction panInstruction = new CommandInstruction(
+            CommandType.PAN_ABSOLUTE,
+            String.format("%.2f", currentYaw),
+            1
+        );
+        recordedCommands.add(panInstruction);
+        lastCommandTick = currentTick;
+
+        // Update saved position and reset flag
+        lastSavedYaw = currentYaw;
+        lastSavedPitch = currentPitch;
+        mousePositionChanged = false;
+
+        LOGGER.debug("Saved mouse position: Yaw={}, Pitch={}", currentYaw, currentPitch);
+    }
+
     private long getCurrentTick() {
         Minecraft client = Minecraft.getInstance();
         if (client.level != null) {
             return client.level.getGameTime();
         }
         return 0;
+    }
+
+    /**
+     * Checks if the player is stationary (no movement keys pressed and velocity below threshold).
+     */
+    private boolean isPlayerStationary(Minecraft client) {
+        if (client.player == null) return true;
+
+        // Check if any movement keys are pressed
+        boolean movementKeysPressed = client.options.keyUp.isDown()
+            || client.options.keyDown.isDown()
+            || client.options.keyLeft.isDown()
+            || client.options.keyRight.isDown();
+
+        if (movementKeysPressed) {
+            return false;
+        }
+
+        // Check velocity magnitude
+        net.minecraft.world.phys.Vec3 velocity = client.player.getDeltaMovement();
+        double velocityMagnitude = Math.sqrt(
+            velocity.x * velocity.x +
+            velocity.y * velocity.y +
+            velocity.z * velocity.z
+        );
+
+        return velocityMagnitude < 0.0001;
     }
 }
