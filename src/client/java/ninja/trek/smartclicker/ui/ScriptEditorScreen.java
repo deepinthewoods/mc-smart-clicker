@@ -13,6 +13,7 @@ import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.script.Script;
+import ninja.trek.smartclicker.recording.RecordingManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +65,13 @@ public class ScriptEditorScreen extends Screen {
             SmartClickerClient.getScriptManager().deleteScript(script);
             onClose();
         }).bounds(this.width / 2 + 120, 30, 60, 20).build());
+
+        // Record button
+        this.addRenderableWidget(Button.builder(Component.literal("Record"), button -> {
+            RecordingManager recordingManager = SmartClickerClient.getRecordingManager();
+            recordingManager.startRecording(script);
+            onClose(); // Close the UI so player can perform actions
+        }).bounds(this.width / 2 + 185, 30, 60, 20).build());
 
         // Back button
         this.addRenderableWidget(Button.builder(Component.literal("Back"), button -> {
