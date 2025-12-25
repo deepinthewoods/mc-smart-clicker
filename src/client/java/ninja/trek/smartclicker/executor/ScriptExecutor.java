@@ -51,6 +51,9 @@ public class ScriptExecutor {
     private TradeTask tradeTask;
     private int tradeTaskPostDelay;
 
+    // Track game time to sync with tick rate changes
+    private long lastGameTime;
+
     // Track what tool type should be in each hotbar slot (for SWAP_TOOL)
     private final Map<Integer, net.minecraft.world.item.Item> expectedToolTypePerSlot = new HashMap<>();
 
@@ -81,6 +84,7 @@ public class ScriptExecutor {
         this.movingRight = false;
         this.ignoreAttackClickThisTick = false;
         this.ignoreUseClickThisTick = false;
+        this.lastGameTime = 0; // Will be initialized on first tick
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -151,6 +155,14 @@ public class ScriptExecutor {
             return;
         }
 
+        // Track game time to sync with tick rate changes
+        long currentGameTime = client.level.getGameTime();
+        long gameTicksPassed = 1; // Default to 1 tick
+        if (lastGameTime != 0) {
+            gameTicksPassed = currentGameTime - lastGameTime;
+        }
+        lastGameTime = currentGameTime;
+
         ignoreAttackClickThisTick = false;
         ignoreUseClickThisTick = false;
 
@@ -195,10 +207,12 @@ public class ScriptExecutor {
             movingRight = false;
         }
 
-        // Handle delay
+        // Handle delay (using game time delta to sync with tick rate)
         if (delayTicks > 0) {
-            delayTicks--;
-            return;
+            delayTicks -= (int) gameTicksPassed;
+            if (delayTicks > 0) {
+                return;
+            }
         }
 
         // Loop back to beginning when reaching the end
@@ -209,7 +223,7 @@ public class ScriptExecutor {
 
         // Continue any in-progress trade task.
         if (tradeTask != null) {
-            if (tradeTask.tick(client)) {
+            if (tradeTask.tick(client, (int) gameTicksPassed)) {
                 tradeTask = null;
                 delayTicks = tradeTaskPostDelay;
                 currentInstructionIndex++;
@@ -222,7 +236,7 @@ public class ScriptExecutor {
         if (instruction.getType() == CommandType.BUY || instruction.getType() == CommandType.SELL) {
             tradeTaskPostDelay = instruction.getPostDelay();
             tradeTask = new TradeTask(instruction.getType(), instruction.getParameter(), instruction.getAmount());
-            if (tradeTask.tick(client)) {
+            if (tradeTask.tick(client, (int) gameTicksPassed)) {
                 tradeTask = null;
                 delayTicks = tradeTaskPostDelay;
                 currentInstructionIndex++;
@@ -599,7 +613,7 @@ public class ScriptExecutor {
             this.targetTrades = Math.max(0, targetTrades);
         }
 
-        public boolean tick(Minecraft client) {
+        public boolean tick(Minecraft client, int gameTicksPassed) {
             LocalPlayer player = client.player;
             if (player == null) return true;
 
@@ -609,8 +623,10 @@ public class ScriptExecutor {
             }
 
             if (actionCooldown > 0) {
-                actionCooldown--;
-                return false;
+                actionCooldown -= gameTicksPassed;
+                if (actionCooldown > 0) {
+                    return false;
+                }
             }
 
             return switch (stage) {
@@ -651,7 +667,8 @@ public class ScriptExecutor {
                         yield false;
                     }
 
-                    if (++waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
+                    waitTicks += gameTicksPassed;
+                    if (waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
                         LOGGER.error("Timed out waiting for villager trade screen for {}", mode);
                         yield true;
                     }
@@ -668,7 +685,8 @@ public class ScriptExecutor {
 
                     MerchantOffers offers = menu.getOffers();
                     if (offers.isEmpty()) {
-                        if (++waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
+                        waitTicks += gameTicksPassed;
+                        if (waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
                             LOGGER.error("No villager offers available for {}", mode);
                             closeScreen(client, player);
                             yield true;
