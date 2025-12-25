@@ -145,6 +145,12 @@ public class ScriptExecutor {
             return;
         }
 
+        // Stop script if player dies
+        if (client.player.isDeadOrDying()) {
+            stop();
+            return;
+        }
+
         ignoreAttackClickThisTick = false;
         ignoreUseClickThisTick = false;
 
