@@ -20,6 +20,7 @@ import net.minecraft.world.item.trading.MerchantOffers;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.mixin.client.InventoryAccessor;
+import ninja.trek.smartclicker.mixin.client.MinecraftAccessor;
 import ninja.trek.smartclicker.script.Script;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,9 @@ public class ScriptExecutor {
 
     // Track what tool type should be in each hotbar slot (for SWAP_TOOL)
     private final Map<Integer, net.minecraft.world.item.Item> expectedToolTypePerSlot = new HashMap<>();
+
+    // Durability threshold for automatic weapon swapping during attacks
+    private static final int WEAPON_SWAP_THRESHOLD = 10;
 
     public ScriptExecutor() {
         this.running = false;
@@ -144,6 +148,19 @@ public class ScriptExecutor {
         ignoreAttackClickThisTick = false;
         ignoreUseClickThisTick = false;
 
+        if (leftHolding) {
+            // Continue attacking every tick - this bypasses target checks
+            ((MinecraftAccessor) client).invokeContinueAttack(true);
+            ignoreAttackClickThisTick = true;
+            // Check and swap weapon if damaged/broken during continuous attacks
+            checkAndSwapWeapon(client, client.player);
+        }
+        if (rightHolding) {
+            // Keep the key down so items that check for continuous use work properly
+            client.options.keyUse.setDown(true);
+            ignoreUseClickThisTick = true;
+        }
+
         // Release any clicks from previous tick (clicks are always 1 tick duration)
         if (leftClicking) {
             client.options.keyAttack.setDown(false);
@@ -220,25 +237,33 @@ public class ScriptExecutor {
 
         switch (instruction.getType()) {
             case LEFT_CLICK -> {
-                client.options.keyAttack.setDown(true);
+                // Directly invoke Minecraft's attack method - works even without a target
+                ((MinecraftAccessor) client).invokeStartAttack();
                 leftClicking = true;
                 ignoreAttackClickThisTick = true;
+                // Check and swap weapon if damaged/broken after attack
+                checkAndSwapWeapon(client, player);
             }
             case RIGHT_CLICK -> {
-                client.options.keyUse.setDown(true);
+                // Directly invoke Minecraft's use item method - works even without a target
+                ((MinecraftAccessor) client).invokeStartUseItem();
                 rightClicking = true;
                 ignoreUseClickThisTick = true;
             }
             case LEFT_HOLD -> {
                 if (!leftHolding) {
-                    client.options.keyAttack.setDown(true);
+                    // Start the attack on first hold
+                    ((MinecraftAccessor) client).invokeStartAttack();
                     ignoreAttackClickThisTick = true;
+                    // Check and swap weapon if damaged/broken after initial attack
+                    checkAndSwapWeapon(client, player);
                 }
                 leftHolding = true;
             }
             case RIGHT_HOLD -> {
                 if (!rightHolding) {
-                    client.options.keyUse.setDown(true);
+                    // Start using the item on first hold
+                    ((MinecraftAccessor) client).invokeStartUseItem();
                     ignoreUseClickThisTick = true;
                 }
                 rightHolding = true;
@@ -339,18 +364,15 @@ public class ScriptExecutor {
                     // Step 2: Check if current item is the expected tool type, restore if not
                     net.minecraft.world.item.Item expectedTool = expectedToolTypePerSlot.get(currentSlot);
                     if (expectedTool != null && (currentItem.isEmpty() || currentItem.getItem() != expectedTool)) {
-                        // Current item is not the expected tool, try to restore it from inventory
-                        for (int i = 9; i < 36; i++) {
+                        // Current item is not the expected tool, try to restore it from hotbar or inventory
+                        // Search hotbar slots first (0-8), then main inventory (9-35)
+                        for (int i = 0; i < 36; i++) {
+                            if (i == currentSlot) continue; // Skip the current slot
                             ItemStack candidateItem = inventory.getItem(i);
                             if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedTool) {
-                                // Found expected tool in inventory, swap it in
-                                inventory.setItem(currentSlot, candidateItem.copy());
-                                if (!currentItem.isEmpty()) {
-                                    inventory.setItem(i, currentItem.copy());
-                                } else {
-                                    inventory.setItem(i, ItemStack.EMPTY);
-                                }
-                                LOGGER.info("Restored {} to slot {}", expectedTool, currentSlot);
+                                // Found expected tool, swap it in (server-synced)
+                                swapInventorySlots(client, player, currentSlot, i);
+                                LOGGER.info("Restored {} to slot {} from slot {}", expectedTool, currentSlot, i);
                                 currentItem = inventory.getItem(currentSlot); // Update reference
                                 break;
                             }
@@ -362,26 +384,32 @@ public class ScriptExecutor {
                         int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
 
                         // Only swap if durability is below threshold
-                        if (remainingDurability < durabilityThreshold) {
+                        if (remainingDurability <= durabilityThreshold) {
                             boolean swapped = false;
+                            int bestSlot = -1;
+                            int bestDurability = remainingDurability;
 
-                            // Search inventory (slots 9-35) for replacement
-                            for (int i = 9; i < 36; i++) {
+                            // Search hotbar (slots 0-8) and main inventory (slots 9-35) for replacement
+                            for (int i = 0; i < 36; i++) {
+                                if (i == currentSlot) continue; // Skip the current slot
                                 ItemStack candidateItem = inventory.getItem(i);
 
                                 // Check if it's the same item type
                                 if (!candidateItem.isEmpty() && ItemStack.isSameItem(currentItem, candidateItem)) {
                                     int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
 
-                                    // Swap if candidate has more durability than threshold
-                                    if (candidateDurability > durabilityThreshold) {
-                                        // Perform swap
-                                        inventory.setItem(currentSlot, candidateItem.copy());
-                                        inventory.setItem(i, currentItem.copy());
-                                        swapped = true;
-                                        LOGGER.info("Swapped tool in slot {} with inventory slot {}", currentSlot, i);
-                                        break;
+                                    // Pick the best candidate above the threshold and current durability.
+                                    if (candidateDurability > durabilityThreshold && candidateDurability > bestDurability) {
+                                        bestDurability = candidateDurability;
+                                        bestSlot = i;
                                     }
+                                }
+                            }
+
+                            if (bestSlot >= 0) {
+                                swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
+                                if (swapped) {
+                                    LOGGER.info("Swapped tool in slot {} with slot {}", currentSlot, bestSlot);
                                 }
                             }
 
@@ -390,10 +418,10 @@ public class ScriptExecutor {
                                 for (int i = 9; i < 36; i++) {
                                     ItemStack slotItem = inventory.getItem(i);
                                     if (slotItem.isEmpty()) {
-                                        // Move current tool to empty slot
-                                        inventory.setItem(i, currentItem.copy());
-                                        inventory.setItem(currentSlot, ItemStack.EMPTY);
-                                        LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
+                                        // Move current tool to empty slot (server-synced)
+                                        if (swapInventorySlots(client, player, currentSlot, i)) {
+                                            LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
+                                        }
                                         break;
                                     }
                                 }
@@ -406,6 +434,131 @@ public class ScriptExecutor {
                     LOGGER.error("Failed to swap tool", e);
                 }
             }
+        }
+    }
+
+    private static boolean swapInventorySlots(Minecraft client, LocalPlayer player, int inventorySlotA, int inventorySlotB) {
+        if (client.gameMode == null) {
+            LOGGER.warn("Cannot swap tools: gameMode is null");
+            return false;
+        }
+
+        if (!player.inventoryMenu.getCarried().isEmpty()) {
+            LOGGER.warn("Cannot swap tools: cursor is not empty");
+            return false;
+        }
+
+        int slotA = toMenuSlotIndex(inventorySlotA);
+        int slotB = toMenuSlotIndex(inventorySlotB);
+        if (slotA < 0 || slotB < 0) {
+            LOGGER.warn("Cannot swap tools: invalid inventory slots {} or {}", inventorySlotA, inventorySlotB);
+            return false;
+        }
+
+        int containerId = player.inventoryMenu.containerId;
+        client.gameMode.handleInventoryMouseClick(containerId, slotA, 0, ClickType.PICKUP, player);
+        client.gameMode.handleInventoryMouseClick(containerId, slotB, 0, ClickType.PICKUP, player);
+        client.gameMode.handleInventoryMouseClick(containerId, slotA, 0, ClickType.PICKUP, player);
+        return true;
+    }
+
+    private static int toMenuSlotIndex(int inventoryIndex) {
+        if (inventoryIndex >= 0 && inventoryIndex <= 8) {
+            return inventoryIndex + 36;
+        }
+        if (inventoryIndex >= 9 && inventoryIndex <= 35) {
+            return inventoryIndex;
+        }
+        return -1;
+    }
+
+    /**
+     * Automatically checks and swaps weapons when they're damaged/broken during attacks.
+     * Uses similar logic to SWAP_TOOL.
+     */
+    private void checkAndSwapWeapon(Minecraft client, LocalPlayer player) {
+        if (player == null) return;
+
+        try {
+            Inventory inventory = player.getInventory();
+            int currentSlot = ((InventoryAccessor) inventory).getSelected();
+            ItemStack currentItem = inventory.getItem(currentSlot);
+
+            // Step 1: Remember what weapon type should be in this slot
+            if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                expectedToolTypePerSlot.put(currentSlot, currentItem.getItem());
+            }
+
+            // Step 2: Check if current item is the expected weapon type, restore if not
+            net.minecraft.world.item.Item expectedWeapon = expectedToolTypePerSlot.get(currentSlot);
+            if (expectedWeapon != null && (currentItem.isEmpty() || currentItem.getItem() != expectedWeapon)) {
+                // Current item is not the expected weapon, try to restore it from hotbar or inventory
+                // Search hotbar slots first (0-8), then main inventory (9-35)
+                for (int i = 0; i < 36; i++) {
+                    if (i == currentSlot) continue; // Skip the current slot
+                    ItemStack candidateItem = inventory.getItem(i);
+                    if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedWeapon) {
+                        // Found expected weapon, swap it in (server-synced)
+                        swapInventorySlots(client, player, currentSlot, i);
+                        LOGGER.info("Restored weapon {} to slot {} from slot {}", expectedWeapon, currentSlot, i);
+                        currentItem = inventory.getItem(currentSlot); // Update reference
+                        break;
+                    }
+                }
+            }
+
+            // Step 3: Check if current weapon has low durability and needs swapping
+            if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
+
+                // Only swap if durability is below threshold or broken
+                if (remainingDurability <= WEAPON_SWAP_THRESHOLD) {
+                    boolean swapped = false;
+                    int bestSlot = -1;
+                    int bestDurability = remainingDurability;
+
+                    // Search hotbar (slots 0-8) and main inventory (slots 9-35) for replacement
+                    for (int i = 0; i < 36; i++) {
+                        if (i == currentSlot) continue; // Skip the current slot
+                        ItemStack candidateItem = inventory.getItem(i);
+
+                        // Check if it's the same item type
+                        if (!candidateItem.isEmpty() && ItemStack.isSameItem(currentItem, candidateItem)) {
+                            int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
+
+                            // Pick the best candidate above the threshold and current durability.
+                            if (candidateDurability > WEAPON_SWAP_THRESHOLD && candidateDurability > bestDurability) {
+                                bestDurability = candidateDurability;
+                                bestSlot = i;
+                            }
+                        }
+                    }
+
+                    if (bestSlot >= 0) {
+                        swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
+                        if (swapped) {
+                            LOGGER.info("Auto-swapped weapon in slot {} with slot {} (durability: {} -> {})",
+                                currentSlot, bestSlot, remainingDurability, bestDurability);
+                        }
+                    }
+
+                    // If no replacement found, move current weapon to empty slot
+                    if (!swapped && remainingDurability <= 0) {
+                        for (int i = 9; i < 36; i++) {
+                            ItemStack slotItem = inventory.getItem(i);
+                            if (slotItem.isEmpty()) {
+                                // Move broken weapon to empty slot (server-synced)
+                                if (swapInventorySlots(client, player, currentSlot, i)) {
+                                    LOGGER.info("Moved broken weapon from slot {} to empty inventory slot {}", currentSlot, i);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to auto-swap weapon", e);
         }
     }
 

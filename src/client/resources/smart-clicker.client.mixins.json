@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ExampleClientMixin",
-		"InventoryAccessor"
+		"InventoryAccessor",
+		"MinecraftAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

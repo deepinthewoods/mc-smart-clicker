@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.resources.ResourceLocation;
 import ninja.trek.smartclicker.SmartClicker;
 import ninja.trek.smartclicker.executor.ScriptExecutor;
@@ -60,18 +61,20 @@ public class SmartClickerClient implements ClientModInitializer {
 				}
 			}
 
-			// Stop script if player clicks or opens inventory
+			// Stop script if player clicks, opens inventory, or opens the pause menu
 			if (executor.isRunning()) {
 				// Check for mouse clicks
 				boolean attackClick = client.options.keyAttack.consumeClick();
 				boolean useClick = client.options.keyUse.consumeClick();
-				if ((attackClick && !executor.shouldIgnoreAttackClick())
-					|| (useClick && !executor.shouldIgnoreUseClick())) {
+				if (attackClick || useClick) {
 					executor.stop();
 				}
 
-				// Check if inventory screen is open
+				// Check if inventory or pause screen is open
 				if (client.screen != null) {
+					if (client.screen instanceof PauseScreen) {
+						executor.stop();
+					}
 					String screenClass = client.screen.getClass().getSimpleName();
 					if (screenClass.contains("Inventory") || screenClass.contains("Container")) {
 						executor.stop();
