@@ -345,12 +345,20 @@ public class ScriptExecutor {
                     default -> LOGGER.error("Invalid move direction: {}", direction);
                 }
             }
-            case TILT_ABSOLUTE -> {
+            case PAN_ABSOLUTE -> {
                 try {
                     float yaw = Float.parseFloat(instruction.getParameter());
                     player.setYRot(yaw);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid yaw value: {}", instruction.getParameter());
+                }
+            }
+            case TILT_ABSOLUTE -> {
+                try {
+                    float pitch = Float.parseFloat(instruction.getParameter());
+                    player.setXRot(pitch);
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Invalid pitch value: {}", instruction.getParameter());
                 }
             }
             case SWAP_TOOL -> {
