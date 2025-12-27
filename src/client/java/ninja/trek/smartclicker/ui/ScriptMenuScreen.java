@@ -3,6 +3,7 @@ package ninja.trek.smartclicker.ui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.network.chat.Component;
 import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.script.Script;
@@ -17,6 +18,7 @@ public class ScriptMenuScreen extends Screen {
     private static final int ROW_HEIGHT = 25;
     private static final int BUTTON_HEIGHT = 20;
     private static final int LIST_TOP = 40;
+    private Checkbox timingModeCheckbox;
 
     public ScriptMenuScreen(Screen parent) {
         super(Component.literal("Smart Clicker Scripts"));
@@ -27,6 +29,19 @@ public class ScriptMenuScreen extends Screen {
     protected void init() {
         super.init();
         buildScriptList();
+
+        // Add timing mode checkbox at the top
+        timingModeCheckbox = Checkbox.builder(
+            Component.literal("Real-world timing (ms)"),
+            this.font
+        )
+        .pos(10, 10)
+        .selected(SmartClickerClient.getConfig().isUseRealWorldTiming())
+        .onValueChange((checkbox, selected) -> {
+            SmartClickerClient.getConfig().setUseRealWorldTiming(selected);
+        })
+        .build();
+        this.addRenderableWidget(timingModeCheckbox);
 
         // Add "+" button at the bottom
         this.addRenderableWidget(Button.builder(Component.literal("+"), button -> {
@@ -41,6 +56,19 @@ public class ScriptMenuScreen extends Screen {
     private void buildScriptList() {
         this.clearWidgets();
         scriptRows.clear();
+
+        // Re-add timing mode checkbox
+        timingModeCheckbox = Checkbox.builder(
+            Component.literal("Real-world timing (ms)"),
+            this.font
+        )
+        .pos(10, 10)
+        .selected(SmartClickerClient.getConfig().isUseRealWorldTiming())
+        .onValueChange((checkbox, selected) -> {
+            SmartClickerClient.getConfig().setUseRealWorldTiming(selected);
+        })
+        .build();
+        this.addRenderableWidget(timingModeCheckbox);
 
         List<Script> scripts = SmartClickerClient.getScriptManager().getScripts();
         int y = LIST_TOP;

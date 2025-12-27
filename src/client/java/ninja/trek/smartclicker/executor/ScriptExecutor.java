@@ -17,6 +17,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
+import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.mixin.client.InventoryAccessor;
@@ -54,11 +55,18 @@ public class ScriptExecutor {
     // Track game time to sync with tick rate changes
     private long lastGameTime;
 
+    // Real-world timing fields
+    private long delayMillis;
+    private long lastRealWorldTime;
+
     // Track what tool type should be in each hotbar slot (for SWAP_TOOL)
     private final Map<Integer, net.minecraft.world.item.Item> expectedToolTypePerSlot = new HashMap<>();
 
-    // Durability threshold for automatic weapon swapping during attacks
-    private static final int WEAPON_SWAP_THRESHOLD = 10;
+    // Track durability threshold per slot (for SWAP_TOOL)
+    private final Map<Integer, Integer> durabilityThresholdPerSlot = new HashMap<>();
+
+    // Default durability threshold for automatic weapon swapping during attacks
+    private static final int DEFAULT_WEAPON_SWAP_THRESHOLD = 10;
 
     public ScriptExecutor() {
         this.running = false;
@@ -73,6 +81,7 @@ public class ScriptExecutor {
         this.currentScript = script;
         this.currentInstructionIndex = 0;
         this.delayTicks = 0;
+        this.delayMillis = 0;
         this.running = true;
         this.leftHolding = false;
         this.rightHolding = false;
@@ -85,6 +94,7 @@ public class ScriptExecutor {
         this.ignoreAttackClickThisTick = false;
         this.ignoreUseClickThisTick = false;
         this.lastGameTime = 0; // Will be initialized on first tick
+        this.lastRealWorldTime = 0; // Will be initialized on first tick
         LOGGER.info("Started script: {}", script.getName());
     }
 
@@ -155,13 +165,24 @@ public class ScriptExecutor {
             return;
         }
 
-        // Track game time to sync with tick rate changes
+        // Determine timing mode
+        boolean useRealWorldTiming = SmartClickerClient.getConfig().isUseRealWorldTiming();
+
+        // Track game time to sync with tick rate changes (for game-tick timing)
         long currentGameTime = client.level.getGameTime();
         long gameTicksPassed = 1; // Default to 1 tick
         if (lastGameTime != 0) {
             gameTicksPassed = currentGameTime - lastGameTime;
         }
         lastGameTime = currentGameTime;
+
+        // Track real-world time (for real-world timing)
+        long currentRealWorldTime = System.currentTimeMillis();
+        long realWorldTimePassed = 0;
+        if (lastRealWorldTime != 0) {
+            realWorldTimePassed = currentRealWorldTime - lastRealWorldTime;
+        }
+        lastRealWorldTime = currentRealWorldTime;
 
         ignoreAttackClickThisTick = false;
         ignoreUseClickThisTick = false;
@@ -207,11 +228,22 @@ public class ScriptExecutor {
             movingRight = false;
         }
 
-        // Handle delay (using game time delta to sync with tick rate)
-        if (delayTicks > 0) {
-            delayTicks -= (int) gameTicksPassed;
+        // Handle delay based on timing mode
+        if (useRealWorldTiming) {
+            // Real-world timing mode: use milliseconds
+            if (delayMillis > 0) {
+                delayMillis -= realWorldTimePassed;
+                if (delayMillis > 0) {
+                    return;
+                }
+            }
+        } else {
+            // Game-tick timing mode: use game ticks
             if (delayTicks > 0) {
-                return;
+                delayTicks -= (int) gameTicksPassed;
+                if (delayTicks > 0) {
+                    return;
+                }
             }
         }
 
@@ -225,7 +257,11 @@ public class ScriptExecutor {
         if (tradeTask != null) {
             if (tradeTask.tick(client, (int) gameTicksPassed)) {
                 tradeTask = null;
-                delayTicks = tradeTaskPostDelay;
+                if (useRealWorldTiming) {
+                    delayMillis = tradeTaskPostDelay * 50L; // Convert ticks to milliseconds (20 TPS = 50ms per tick)
+                } else {
+                    delayTicks = tradeTaskPostDelay;
+                }
                 currentInstructionIndex++;
             }
             return;
@@ -238,7 +274,11 @@ public class ScriptExecutor {
             tradeTask = new TradeTask(instruction.getType(), instruction.getParameter(), instruction.getAmount());
             if (tradeTask.tick(client, (int) gameTicksPassed)) {
                 tradeTask = null;
-                delayTicks = tradeTaskPostDelay;
+                if (useRealWorldTiming) {
+                    delayMillis = tradeTaskPostDelay * 50L; // Convert ticks to milliseconds
+                } else {
+                    delayTicks = tradeTaskPostDelay;
+                }
                 currentInstructionIndex++;
             }
             return;
@@ -247,7 +287,11 @@ public class ScriptExecutor {
         executeInstruction(client, instruction);
 
         // Set delay and move to next instruction
-        delayTicks = instruction.getPostDelay();
+        if (useRealWorldTiming) {
+            delayMillis = instruction.getPostDelay() * 50L; // Convert ticks to milliseconds (20 TPS = 50ms per tick)
+        } else {
+            delayTicks = instruction.getPostDelay();
+        }
         currentInstructionIndex++;
     }
 
@@ -384,9 +428,10 @@ public class ScriptExecutor {
                     int currentSlot = ((InventoryAccessor) inventory).getSelected();
                     ItemStack currentItem = inventory.getItem(currentSlot);
 
-                    // Step 1: Remember what tool type should be in this slot
+                    // Step 1: Remember what tool type should be in this slot and its threshold
                     if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
                         expectedToolTypePerSlot.put(currentSlot, currentItem.getItem());
+                        durabilityThresholdPerSlot.put(currentSlot, durabilityThreshold);
                     }
 
                     // Step 2: Check if current item is the expected tool type, restore if not
@@ -462,6 +507,7 @@ public class ScriptExecutor {
                     LOGGER.error("Failed to swap tool", e);
                 }
             }
+            case REFILL_SLOT -> refillSelectedSlot(client, player);
         }
     }
 
@@ -498,6 +544,56 @@ public class ScriptExecutor {
             return inventoryIndex;
         }
         return -1;
+    }
+
+    private static void refillSelectedSlot(Minecraft client, LocalPlayer player) {
+        if (client.gameMode == null) {
+            LOGGER.warn("Cannot refill slot: gameMode is null");
+            return;
+        }
+
+        if (!player.inventoryMenu.getCarried().isEmpty()) {
+            LOGGER.warn("Cannot refill slot: cursor is not empty");
+            return;
+        }
+
+        Inventory inventory = player.getInventory();
+        int selectedSlot = ((InventoryAccessor) inventory).getSelected();
+        ItemStack target = inventory.getItem(selectedSlot);
+        if (target.isEmpty() || !target.isStackable()) {
+            return;
+        }
+
+        int targetMax = target.getMaxStackSize();
+        if (target.getCount() >= targetMax) {
+            return;
+        }
+
+        int targetMenuSlot = toMenuSlotIndex(selectedSlot);
+        if (targetMenuSlot < 0) {
+            return;
+        }
+
+        int containerId = player.inventoryMenu.containerId;
+        int remaining = targetMax - target.getCount();
+
+        for (int i = 9; i <= 35 && remaining > 0; i++) {
+            ItemStack candidate = inventory.getItem(i);
+            if (candidate.isEmpty()) continue;
+            if (!ItemStack.isSameItemSameComponents(candidate, target)) continue;
+
+            int sourceMenuSlot = toMenuSlotIndex(i);
+            if (sourceMenuSlot < 0) continue;
+
+            client.gameMode.handleInventoryMouseClick(containerId, sourceMenuSlot, 0, ClickType.PICKUP, player);
+            client.gameMode.handleInventoryMouseClick(containerId, targetMenuSlot, 0, ClickType.PICKUP, player);
+            if (!player.inventoryMenu.getCarried().isEmpty()) {
+                client.gameMode.handleInventoryMouseClick(containerId, sourceMenuSlot, 0, ClickType.PICKUP, player);
+            }
+
+            ItemStack updatedTarget = inventory.getItem(selectedSlot);
+            remaining = updatedTarget.getMaxStackSize() - updatedTarget.getCount();
+        }
     }
 
     /**
@@ -539,8 +635,11 @@ public class ScriptExecutor {
             if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
                 int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
 
+                // Get the threshold for this slot, default to 10 if not set via SWAP_TOOL
+                int threshold = durabilityThresholdPerSlot.getOrDefault(currentSlot, DEFAULT_WEAPON_SWAP_THRESHOLD);
+
                 // Only swap if durability is below threshold or broken
-                if (remainingDurability <= WEAPON_SWAP_THRESHOLD) {
+                if (remainingDurability <= threshold) {
                     boolean swapped = false;
                     int bestSlot = -1;
                     int bestDurability = remainingDurability;
@@ -555,7 +654,7 @@ public class ScriptExecutor {
                             int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
 
                             // Pick the best candidate above the threshold and current durability.
-                            if (candidateDurability > WEAPON_SWAP_THRESHOLD && candidateDurability > bestDurability) {
+                            if (candidateDurability > threshold && candidateDurability > bestDurability) {
                                 bestDurability = candidateDurability;
                                 bestSlot = i;
                             }

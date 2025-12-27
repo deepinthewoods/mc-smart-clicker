@@ -15,6 +15,7 @@ public enum CommandType {
     PAN_ABSOLUTE("Pan Absolute", true),
     TILT_ABSOLUTE("Tilt Absolute", true),
     SWAP_TOOL("swap tool <", true),
+    REFILL_SLOT("Refill Slot", false),
     BUY("Buy", true),
     SELL("Sell", true);
 

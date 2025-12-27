@@ -26,6 +26,7 @@ public class SmartClickerClient implements ClientModInitializer {
 	private static final KeyMapping.Category KEY_CATEGORY =
 		KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(SmartClicker.MOD_ID, "main"));
 
+	private static Config config;
 	private static ScriptManager scriptManager;
 	private static ScriptExecutor executor;
 	private static RecordingManager recordingManager;
@@ -34,6 +35,9 @@ public class SmartClickerClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		LOGGER.info("Initializing Smart Clicker Client");
+
+		// Initialize config
+		config = new Config(FabricLoader.getInstance().getConfigDir());
 
 		// Initialize script manager
 		scriptManager = new ScriptManager(FabricLoader.getInstance().getConfigDir());
@@ -126,6 +130,10 @@ public class SmartClickerClient implements ClientModInitializer {
 		});
 
 		LOGGER.info("Smart Clicker Client initialized");
+	}
+
+	public static Config getConfig() {
+		return config;
 	}
 
 	public static ScriptManager getScriptManager() {
