@@ -42,12 +42,18 @@ public class ScriptExecutor {
     private boolean rightHolding;
     private boolean leftClicking;
     private boolean rightClicking;
+    private boolean rightHoldOnlyIfHungry;
+    private int leftHoldRemainingTicks;
+    private int rightHoldRemainingTicks;
+    private long leftHoldRemainingMillis;
+    private long rightHoldRemainingMillis;
     private boolean movingForward;
     private boolean movingBack;
     private boolean movingLeft;
     private boolean movingRight;
     private boolean ignoreAttackClickThisTick;
     private boolean ignoreUseClickThisTick;
+    private boolean skipPostDelayThisInstruction;
 
     private TradeTask tradeTask;
     private int tradeTaskPostDelay;
@@ -87,12 +93,18 @@ public class ScriptExecutor {
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.rightHoldOnlyIfHungry = false;
+        this.leftHoldRemainingTicks = 0;
+        this.rightHoldRemainingTicks = 0;
+        this.leftHoldRemainingMillis = 0;
+        this.rightHoldRemainingMillis = 0;
         this.movingForward = false;
         this.movingBack = false;
         this.movingLeft = false;
         this.movingRight = false;
         this.ignoreAttackClickThisTick = false;
         this.ignoreUseClickThisTick = false;
+        this.skipPostDelayThisInstruction = false;
         this.lastGameTime = 0; // Will be initialized on first tick
         this.lastRealWorldTime = 0; // Will be initialized on first tick
         LOGGER.info("Started script: {}", script.getName());
@@ -130,6 +142,11 @@ public class ScriptExecutor {
         this.rightHolding = false;
         this.leftClicking = false;
         this.rightClicking = false;
+        this.rightHoldOnlyIfHungry = false;
+        this.leftHoldRemainingTicks = 0;
+        this.rightHoldRemainingTicks = 0;
+        this.leftHoldRemainingMillis = 0;
+        this.rightHoldRemainingMillis = 0;
         this.movingForward = false;
         this.movingBack = false;
         this.movingLeft = false;
@@ -186,6 +203,9 @@ public class ScriptExecutor {
 
         ignoreAttackClickThisTick = false;
         ignoreUseClickThisTick = false;
+        skipPostDelayThisInstruction = false;
+
+        updateHoldTimers(client, useRealWorldTiming, gameTicksPassed, realWorldTimePassed);
 
         if (leftHolding) {
             // Continue attacking every tick - this bypasses target checks
@@ -208,6 +228,11 @@ public class ScriptExecutor {
         if (rightClicking) {
             client.options.keyUse.setDown(false);
             rightClicking = false;
+        }
+
+        // Auto-replace tools if enabled
+        if (currentScript.isReplaceTools()) {
+            checkAndReplaceTool(client, client.player);
         }
 
         // Release any movement from previous tick (movement is always 1 tick duration)
@@ -287,7 +312,10 @@ public class ScriptExecutor {
         executeInstruction(client, instruction);
 
         // Set delay and move to next instruction
-        if (useRealWorldTiming) {
+        if (skipPostDelayThisInstruction) {
+            delayMillis = 0;
+            delayTicks = 0;
+        } else if (useRealWorldTiming) {
             delayMillis = instruction.getPostDelay() * 50L; // Convert ticks to milliseconds (20 TPS = 50ms per tick)
         } else {
             delayTicks = instruction.getPostDelay();
@@ -323,14 +351,43 @@ public class ScriptExecutor {
                     checkAndSwapWeapon(client, player);
                 }
                 leftHolding = true;
+                setHoldDuration(true, instruction.getPostDelay());
             }
             case RIGHT_HOLD -> {
                 if (!rightHolding) {
                     // Start using the item on first hold
                     ((MinecraftAccessor) client).invokeStartUseItem();
+                    client.options.keyUse.setDown(true);
                     ignoreUseClickThisTick = true;
                 }
                 rightHolding = true;
+                rightHoldOnlyIfHungry = false;
+                setHoldDuration(false, instruction.getPostDelay());
+            }
+            case RIGHT_IF_HUNGRY -> {
+                if (player.getFoodData().getFoodLevel() < 20) {
+                    if (!rightHolding) {
+                        // Start using the item on first hold
+                        ((MinecraftAccessor) client).invokeStartUseItem();
+                        client.options.keyUse.setDown(true);
+                        ignoreUseClickThisTick = true;
+                    }
+                    rightHolding = true;
+                    rightHoldOnlyIfHungry = true;
+                    setHoldDuration(false, instruction.getPostDelay());
+                } else {
+                    // Player is not hungry - stop holding if we were, and skip post-delay
+                    if (rightHolding && rightHoldOnlyIfHungry) {
+                        rightHolding = false;
+                        rightHoldOnlyIfHungry = false;
+                        rightHoldRemainingTicks = 0;
+                        rightHoldRemainingMillis = 0;
+                        if (client.options.keyUse.isDown()) {
+                            client.options.keyUse.setDown(false);
+                        }
+                    }
+                    skipPostDelayThisInstruction = true;
+                }
             }
             case BELT_SELECT -> {
                 try {
@@ -347,6 +404,8 @@ public class ScriptExecutor {
                     float degrees = Float.parseFloat(instruction.getParameter());
                     float newYaw = player.getYRot() + degrees;
                     player.setYRot(newYaw);
+                    // Also update camera rotation if in freecam mode
+                    CraneshotCompatibility.updateCameraRotation(degrees, 0);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid pan angle: {}", instruction.getParameter());
                 }
@@ -356,20 +415,26 @@ public class ScriptExecutor {
                     float degrees = Float.parseFloat(instruction.getParameter());
                     float newPitch = player.getXRot() + degrees;
                     player.setXRot(newPitch);
+                    // Also update camera rotation if in freecam mode
+                    CraneshotCompatibility.updateCameraRotation(0, -degrees);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid tilt angle: {}", instruction.getParameter());
                 }
             }
             case FACE -> {
                 String direction = instruction.getParameter().toUpperCase();
+                float currentYaw = player.getYRot();
                 float targetYaw = switch (direction) {
                     case "N" -> 180.0f;
                     case "S" -> 0.0f;
                     case "E" -> -90.0f;
                     case "W" -> 90.0f;
-                    default -> player.getYRot();
+                    default -> currentYaw;
                 };
+                float delta = targetYaw - currentYaw;
                 player.setYRot(targetYaw);
+                // Also update camera rotation if in freecam mode
+                CraneshotCompatibility.updateCameraRotation(delta, 0);
             }
             case JUMP -> {
                 if (player.onGround()) {
@@ -405,16 +470,24 @@ public class ScriptExecutor {
             }
             case PAN_ABSOLUTE -> {
                 try {
-                    float yaw = Float.parseFloat(instruction.getParameter());
-                    player.setYRot(yaw);
+                    float targetYaw = Float.parseFloat(instruction.getParameter());
+                    float currentYaw = player.getYRot();
+                    float delta = targetYaw - currentYaw;
+                    player.setYRot(targetYaw);
+                    // Also update camera rotation if in freecam mode
+                    CraneshotCompatibility.updateCameraRotation(delta, 0);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid yaw value: {}", instruction.getParameter());
                 }
             }
             case TILT_ABSOLUTE -> {
                 try {
-                    float pitch = Float.parseFloat(instruction.getParameter());
-                    player.setXRot(pitch);
+                    float targetPitch = Float.parseFloat(instruction.getParameter());
+                    float currentPitch = player.getXRot();
+                    float delta = targetPitch - currentPitch;
+                    player.setXRot(targetPitch);
+                    // Also update camera rotation if in freecam mode
+                    CraneshotCompatibility.updateCameraRotation(0, -delta);
                 } catch (NumberFormatException e) {
                     LOGGER.error("Invalid pitch value: {}", instruction.getParameter());
                 }
@@ -511,6 +584,93 @@ public class ScriptExecutor {
         }
     }
 
+    private void setHoldDuration(boolean isLeftHold, int holdTicks) {
+        boolean useRealWorldTiming = SmartClickerClient.getConfig().isUseRealWorldTiming();
+        if (useRealWorldTiming) {
+            long holdMillis = holdTicks * 50L;
+            if (isLeftHold) {
+                leftHoldRemainingMillis = holdMillis;
+                leftHoldRemainingTicks = 0;
+            } else {
+                rightHoldRemainingMillis = holdMillis;
+                rightHoldRemainingTicks = 0;
+            }
+        } else {
+            if (isLeftHold) {
+                leftHoldRemainingTicks = holdTicks;
+                leftHoldRemainingMillis = 0;
+            } else {
+                rightHoldRemainingTicks = holdTicks;
+                rightHoldRemainingMillis = 0;
+            }
+        }
+    }
+
+    private void updateHoldTimers(Minecraft client, boolean useRealWorldTiming, long gameTicksPassed, long realWorldTimePassed) {
+        if (rightHolding && rightHoldOnlyIfHungry) {
+            LocalPlayer player = client.player;
+            if (player == null || player.getFoodData().getFoodLevel() >= 20) {
+                rightHoldRemainingTicks = 0;
+                rightHoldRemainingMillis = 0;
+                rightHolding = false;
+                rightHoldOnlyIfHungry = false;
+                if (client.options.keyUse.isDown()) {
+                    client.options.keyUse.setDown(false);
+                }
+            }
+        }
+
+        if (leftHolding) {
+            if (useRealWorldTiming) {
+                if (leftHoldRemainingMillis > 0) {
+                    leftHoldRemainingMillis -= realWorldTimePassed;
+                    if (leftHoldRemainingMillis <= 0) {
+                        leftHoldRemainingMillis = 0;
+                        leftHolding = false;
+                        if (client.options.keyAttack.isDown()) {
+                            client.options.keyAttack.setDown(false);
+                        }
+                    }
+                }
+            } else if (leftHoldRemainingTicks > 0) {
+                leftHoldRemainingTicks -= (int) gameTicksPassed;
+                if (leftHoldRemainingTicks <= 0) {
+                    leftHoldRemainingTicks = 0;
+                    leftHolding = false;
+                    if (client.options.keyAttack.isDown()) {
+                        client.options.keyAttack.setDown(false);
+                    }
+                }
+            }
+        }
+
+        if (rightHolding) {
+            if (useRealWorldTiming) {
+                if (rightHoldRemainingMillis > 0) {
+                    rightHoldRemainingMillis -= realWorldTimePassed;
+                    if (rightHoldRemainingMillis <= 0) {
+                        rightHoldRemainingMillis = 0;
+                        rightHolding = false;
+                        rightHoldOnlyIfHungry = false;
+                        if (client.options.keyUse.isDown()) {
+                            client.options.keyUse.setDown(false);
+                        }
+                    }
+                }
+            } else if (rightHoldRemainingTicks > 0) {
+                rightHoldRemainingTicks -= (int) gameTicksPassed;
+                if (rightHoldRemainingTicks <= 0) {
+                    rightHoldRemainingTicks = 0;
+                    rightHolding = false;
+                    rightHoldOnlyIfHungry = false;
+                    if (client.options.keyUse.isDown()) {
+                        client.options.keyUse.setDown(false);
+                    }
+                }
+            }
+        }
+    }
+
     private static boolean swapInventorySlots(Minecraft client, LocalPlayer player, int inventorySlotA, int inventorySlotB) {
         if (client.gameMode == null) {
             LOGGER.warn("Cannot swap tools: gameMode is null");
@@ -593,6 +753,101 @@ public class ScriptExecutor {
 
             ItemStack updatedTarget = inventory.getItem(selectedSlot);
             remaining = updatedTarget.getMaxStackSize() - updatedTarget.getCount();
+        }
+    }
+
+    /**
+     * Automatically checks and replaces any tool/weapon when enabled via the Replace Tools checkbox.
+     * Uses similar logic to SWAP_TOOL with configurable threshold.
+     */
+    private void checkAndReplaceTool(Minecraft client, LocalPlayer player) {
+        if (player == null || currentScript == null) return;
+
+        try {
+            Inventory inventory = player.getInventory();
+            int currentSlot = ((InventoryAccessor) inventory).getSelected();
+            ItemStack currentItem = inventory.getItem(currentSlot);
+
+            // Get threshold from script settings
+            int threshold = currentScript.getReplaceToolsThreshold();
+
+            // Only track damageable items (tools, weapons, armor)
+            if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                // Remember what tool type should be in this slot
+                if (!expectedToolTypePerSlot.containsKey(currentSlot)) {
+                    expectedToolTypePerSlot.put(currentSlot, currentItem.getItem());
+                    // Also update the threshold for this slot
+                    durabilityThresholdPerSlot.put(currentSlot, threshold);
+                }
+            }
+
+            // Check if current item is the expected tool type, restore if not
+            net.minecraft.world.item.Item expectedTool = expectedToolTypePerSlot.get(currentSlot);
+            if (expectedTool != null && (currentItem.isEmpty() || currentItem.getItem() != expectedTool)) {
+                // Current item is not the expected tool, try to restore it from hotbar or inventory
+                for (int i = 0; i < 36; i++) {
+                    if (i == currentSlot) continue;
+                    ItemStack candidateItem = inventory.getItem(i);
+                    if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedTool) {
+                        // Found expected tool, swap it in
+                        swapInventorySlots(client, player, currentSlot, i);
+                        LOGGER.info("Auto-restored {} to slot {} from slot {}", expectedTool, currentSlot, i);
+                        currentItem = inventory.getItem(currentSlot);
+                        break;
+                    }
+                }
+            }
+
+            // Check if current tool has low durability and needs swapping
+            if (!currentItem.isEmpty() && currentItem.isDamageableItem()) {
+                int remainingDurability = currentItem.getMaxDamage() - currentItem.getDamageValue();
+
+                // Only swap if durability is at or below threshold
+                if (remainingDurability <= threshold) {
+                    boolean swapped = false;
+                    int bestSlot = -1;
+                    int bestDurability = remainingDurability;
+
+                    // Search for replacement with better durability
+                    for (int i = 0; i < 36; i++) {
+                        if (i == currentSlot) continue;
+                        ItemStack candidateItem = inventory.getItem(i);
+
+                        if (!candidateItem.isEmpty() && ItemStack.isSameItem(currentItem, candidateItem)) {
+                            int candidateDurability = candidateItem.getMaxDamage() - candidateItem.getDamageValue();
+
+                            // Accept any replacement with higher durability than current
+                            if (candidateDurability > remainingDurability && candidateDurability > bestDurability) {
+                                bestDurability = candidateDurability;
+                                bestSlot = i;
+                            }
+                        }
+                    }
+
+                    if (bestSlot >= 0) {
+                        swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
+                        if (swapped) {
+                            LOGGER.info("Auto-replaced tool in slot {} with slot {} (durability: {} -> {}, threshold: {})",
+                                currentSlot, bestSlot, remainingDurability, bestDurability, threshold);
+                        }
+                    }
+
+                    // If no replacement found and tool is broken (0 durability), move it to empty slot
+                    if (!swapped && remainingDurability <= 0) {
+                        for (int i = 9; i < 36; i++) {
+                            ItemStack slotItem = inventory.getItem(i);
+                            if (slotItem.isEmpty()) {
+                                if (swapInventorySlots(client, player, currentSlot, i)) {
+                                    LOGGER.info("Moved broken tool from slot {} to empty inventory slot {}", currentSlot, i);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to auto-replace tool", e);
         }
     }
 

@@ -31,6 +31,8 @@ public class ScriptEditorScreen extends Screen {
     private EditBox nameField;
     private boolean recordMouseMovements = false;
     private Button recordMouseToggle;
+    private Button replaceToolsToggle;
+    private EditBox replaceToolsThresholdField;
     private static List<String> ALL_ITEM_IDS;
 
     public ScriptEditorScreen(Screen parent, Script script) {
@@ -77,6 +79,29 @@ public class ScriptEditorScreen extends Screen {
             }
         ).bounds(this.width / 2 + 185, 10, 80, 20).build();
         this.addRenderableWidget(recordMouseToggle);
+
+        // Replace Tools toggle button
+        this.replaceToolsToggle = Button.builder(
+            Component.literal("Replace: " + (script.isReplaceTools() ? "ON" : "OFF")),
+            button -> {
+                script.setReplaceTools(!script.isReplaceTools());
+                button.setMessage(Component.literal("Replace: " + (script.isReplaceTools() ? "ON" : "OFF")));
+                SmartClickerClient.getScriptManager().saveScript(script);
+            }
+        ).bounds(this.width / 2 + 185, 33, 60, 20).build();
+        this.addRenderableWidget(replaceToolsToggle);
+
+        // Replace Tools threshold field
+        this.replaceToolsThresholdField = new EditBox(this.font, this.width / 2 + 247, 35, 35, 16, Component.literal("Threshold"));
+        this.replaceToolsThresholdField.setMaxLength(3);
+        this.replaceToolsThresholdField.setFilter(text -> text.isEmpty() || text.chars().allMatch(Character::isDigit));
+        this.replaceToolsThresholdField.setValue(Integer.toString(script.getReplaceToolsThreshold()));
+        this.replaceToolsThresholdField.setResponder(text -> {
+            int threshold = text == null || text.isEmpty() ? 0 : Integer.parseInt(text);
+            script.setReplaceToolsThreshold(threshold);
+            SmartClickerClient.getScriptManager().saveScript(script);
+        });
+        this.addRenderableWidget(replaceToolsThresholdField);
 
         // Record button
         this.addRenderableWidget(Button.builder(Component.literal("Record"), button -> {

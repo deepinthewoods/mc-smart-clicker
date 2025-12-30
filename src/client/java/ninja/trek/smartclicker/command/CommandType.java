@@ -5,6 +5,7 @@ public enum CommandType {
     RIGHT_CLICK("Right Click", false),
     LEFT_HOLD("Left Hold", false),
     RIGHT_HOLD("Right Hold", false),
+    RIGHT_IF_HUNGRY("Right If Hungry", false),
     BELT_SELECT("Belt Select", true),
     PAN_MOUSE("Pan Mouse", true),
     TILT_MOUSE("Tilt Mouse", true),
