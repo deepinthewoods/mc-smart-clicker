@@ -5,12 +5,12 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundSelectTradePacket;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.Slot;
@@ -212,7 +212,9 @@ public class ScriptExecutor {
             ((MinecraftAccessor) client).invokeContinueAttack(true);
             ignoreAttackClickThisTick = true;
             // Check and swap weapon if damaged/broken during continuous attacks
-            checkAndSwapWeapon(client, client.player);
+            if (currentScript.isReplaceTools()) {
+                checkAndSwapWeapon(client, client.player);
+            }
         }
         if (rightHolding) {
             // Keep the key down so items that check for continuous use work properly
@@ -334,7 +336,9 @@ public class ScriptExecutor {
                 leftClicking = true;
                 ignoreAttackClickThisTick = true;
                 // Check and swap weapon if damaged/broken after attack
-                checkAndSwapWeapon(client, player);
+                if (currentScript.isReplaceTools()) {
+                    checkAndSwapWeapon(client, player);
+                }
             }
             case RIGHT_CLICK -> {
                 // Directly invoke Minecraft's use item method - works even without a target
@@ -348,7 +352,9 @@ public class ScriptExecutor {
                     ((MinecraftAccessor) client).invokeStartAttack();
                     ignoreAttackClickThisTick = true;
                     // Check and swap weapon if damaged/broken after initial attack
-                    checkAndSwapWeapon(client, player);
+                    if (currentScript.isReplaceTools()) {
+                        checkAndSwapWeapon(client, player);
+                    }
                 }
                 leftHolding = true;
                 setHoldDuration(true, instruction.getPostDelay());
@@ -950,7 +956,7 @@ public class ScriptExecutor {
 
         private final CommandType mode;
         private final String itemIdText;
-        private final ResourceLocation itemId;
+        private final Identifier itemId;
         private final int targetTrades;
 
         private int stage = 0;
@@ -963,7 +969,7 @@ public class ScriptExecutor {
         private TradeTask(CommandType mode, String itemIdText, int targetTrades) {
             this.mode = mode;
             this.itemIdText = itemIdText == null ? "" : itemIdText.trim();
-            this.itemId = ResourceLocation.tryParse(this.itemIdText);
+            this.itemId = Identifier.tryParse(this.itemIdText);
             this.targetTrades = Math.max(0, targetTrades);
         }
 
@@ -1184,7 +1190,7 @@ public class ScriptExecutor {
             }
         }
 
-        private static boolean matchesOffer(CommandType mode, ResourceLocation itemId, MerchantOffer offer) {
+        private static boolean matchesOffer(CommandType mode, Identifier itemId, MerchantOffer offer) {
             if (mode == CommandType.BUY) {
                 return BuiltInRegistries.ITEM.getKey(offer.getResult().getItem()).equals(itemId);
             }
@@ -1193,7 +1199,7 @@ public class ScriptExecutor {
                 || (!offer.getCostB().isEmpty() && BuiltInRegistries.ITEM.getKey(offer.getCostB().getItem()).equals(itemId));
         }
 
-        private static int pickBestOfferIndex(Inventory inventory, MerchantOffers offers, CommandType mode, ResourceLocation itemId) {
+        private static int pickBestOfferIndex(Inventory inventory, MerchantOffers offers, CommandType mode, Identifier itemId) {
             int bestIndex = -1;
             long bestResultCount = 0;
             long bestTotalCost = 1;

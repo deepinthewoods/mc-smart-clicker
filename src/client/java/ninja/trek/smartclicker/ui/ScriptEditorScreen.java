@@ -8,7 +8,7 @@ import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import ninja.trek.smartclicker.SmartClickerClient;
 import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
@@ -47,7 +47,7 @@ public class ScriptEditorScreen extends Screen {
 
         if (ALL_ITEM_IDS == null) {
             ALL_ITEM_IDS = BuiltInRegistries.ITEM.keySet().stream()
-                .map(ResourceLocation::toString)
+                .map(Identifier::toString)
                 .sorted()
                 .toList();
         }

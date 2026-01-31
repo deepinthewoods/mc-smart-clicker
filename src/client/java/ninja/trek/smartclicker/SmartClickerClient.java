@@ -9,7 +9,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.PauseScreen;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import ninja.trek.smartclicker.SmartClicker;
 import ninja.trek.smartclicker.executor.ScriptExecutor;
 import ninja.trek.smartclicker.script.Script;
@@ -24,7 +24,7 @@ public class SmartClickerClient implements ClientModInitializer {
 	public static final Logger LOGGER = LoggerFactory.getLogger("SmartClicker");
 
 	private static final KeyMapping.Category KEY_CATEGORY =
-		KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(SmartClicker.MOD_ID, "main"));
+		KeyMapping.Category.register(Identifier.fromNamespaceAndPath(SmartClicker.MOD_ID, "main"));
 
 	private static Config config;
 	private static ScriptManager scriptManager;
