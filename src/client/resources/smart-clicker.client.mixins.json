@@ -3,6 +3,7 @@
 	"package": "ninja.trek.smartclicker.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"DropItemMixin",
 		"ExampleClientMixin",
 		"InventoryAccessor",
 		"MinecraftAccessor"

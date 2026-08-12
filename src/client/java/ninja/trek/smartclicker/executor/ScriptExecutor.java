@@ -23,8 +23,6 @@ import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.mixin.client.InventoryAccessor;
 import ninja.trek.smartclicker.mixin.client.MinecraftAccessor;
 import ninja.trek.smartclicker.script.Script;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 public class ScriptExecutor {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ScriptExecutor.class);
 
     private Script currentScript;
     private int currentInstructionIndex;
@@ -80,7 +77,6 @@ public class ScriptExecutor {
 
     public void startScript(Script script) {
         if (script == null || script.getInstructions().isEmpty()) {
-            LOGGER.warn("Cannot start empty script");
             return;
         }
 
@@ -107,7 +103,6 @@ public class ScriptExecutor {
         this.skipPostDelayThisInstruction = false;
         this.lastGameTime = 0; // Will be initialized on first tick
         this.lastRealWorldTime = 0; // Will be initialized on first tick
-        LOGGER.info("Started script: {}", script.getName());
     }
 
     public void stop() {
@@ -152,7 +147,6 @@ public class ScriptExecutor {
         this.movingLeft = false;
         this.movingRight = false;
         this.tradeTask = null;
-        LOGGER.info("Stopped script");
     }
 
     public boolean isRunning() {
@@ -402,7 +396,6 @@ public class ScriptExecutor {
                         ((InventoryAccessor) player.getInventory()).setSelected(slot);
                     }
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid belt slot: {}", instruction.getParameter());
                 }
             }
             case PAN_MOUSE -> {
@@ -413,7 +406,6 @@ public class ScriptExecutor {
                     // Also update camera rotation if in freecam mode
                     CraneshotCompatibility.updateCameraRotation(degrees, 0);
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid pan angle: {}", instruction.getParameter());
                 }
             }
             case TILT_MOUSE -> {
@@ -424,7 +416,6 @@ public class ScriptExecutor {
                     // Also update camera rotation if in freecam mode
                     CraneshotCompatibility.updateCameraRotation(0, -degrees);
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid tilt angle: {}", instruction.getParameter());
                 }
             }
             case FACE -> {
@@ -471,7 +462,7 @@ public class ScriptExecutor {
                         client.options.keyRight.setDown(true);
                         movingRight = true;
                     }
-                    default -> LOGGER.error("Invalid move direction: {}", direction);
+                    default -> {}
                 }
             }
             case PAN_ABSOLUTE -> {
@@ -483,7 +474,6 @@ public class ScriptExecutor {
                     // Also update camera rotation if in freecam mode
                     CraneshotCompatibility.updateCameraRotation(delta, 0);
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid yaw value: {}", instruction.getParameter());
                 }
             }
             case TILT_ABSOLUTE -> {
@@ -495,7 +485,6 @@ public class ScriptExecutor {
                     // Also update camera rotation if in freecam mode
                     CraneshotCompatibility.updateCameraRotation(0, -delta);
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid pitch value: {}", instruction.getParameter());
                 }
             }
             case SWAP_TOOL -> {
@@ -524,7 +513,6 @@ public class ScriptExecutor {
                             if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedTool) {
                                 // Found expected tool, swap it in (server-synced)
                                 swapInventorySlots(client, player, currentSlot, i);
-                                LOGGER.info("Restored {} to slot {} from slot {}", expectedTool, currentSlot, i);
                                 currentItem = inventory.getItem(currentSlot); // Update reference
                                 break;
                             }
@@ -561,7 +549,6 @@ public class ScriptExecutor {
                             if (bestSlot >= 0) {
                                 swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
                                 if (swapped) {
-                                    LOGGER.info("Swapped tool in slot {} with slot {}", currentSlot, bestSlot);
                                 }
                             }
 
@@ -571,9 +558,7 @@ public class ScriptExecutor {
                                     ItemStack slotItem = inventory.getItem(i);
                                     if (slotItem.isEmpty()) {
                                         // Move current tool to empty slot (server-synced)
-                                        if (swapInventorySlots(client, player, currentSlot, i)) {
-                                            LOGGER.info("Moved tool from slot {} to empty inventory slot {}", currentSlot, i);
-                                        }
+                                        swapInventorySlots(client, player, currentSlot, i);
                                         break;
                                     }
                                 }
@@ -581,12 +566,23 @@ public class ScriptExecutor {
                         }
                     }
                 } catch (NumberFormatException e) {
-                    LOGGER.error("Invalid durability threshold: {}", instruction.getParameter());
                 } catch (Exception e) {
-                    LOGGER.error("Failed to swap tool", e);
                 }
             }
             case REFILL_SLOT -> refillSelectedSlot(client, player);
+            case DROP_ITEM -> {
+                try {
+                    int count = Integer.parseInt(instruction.getParameter());
+                    if (count >= 64) {
+                        player.drop(true);
+                    } else {
+                        for (int i = 0; i < count; i++) {
+                            player.drop(false);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                }
+            }
         }
     }
 
@@ -679,19 +675,16 @@ public class ScriptExecutor {
 
     private static boolean swapInventorySlots(Minecraft client, LocalPlayer player, int inventorySlotA, int inventorySlotB) {
         if (client.gameMode == null) {
-            LOGGER.warn("Cannot swap tools: gameMode is null");
             return false;
         }
 
         if (!player.inventoryMenu.getCarried().isEmpty()) {
-            LOGGER.warn("Cannot swap tools: cursor is not empty");
             return false;
         }
 
         int slotA = toMenuSlotIndex(inventorySlotA);
         int slotB = toMenuSlotIndex(inventorySlotB);
         if (slotA < 0 || slotB < 0) {
-            LOGGER.warn("Cannot swap tools: invalid inventory slots {} or {}", inventorySlotA, inventorySlotB);
             return false;
         }
 
@@ -714,12 +707,10 @@ public class ScriptExecutor {
 
     private static void refillSelectedSlot(Minecraft client, LocalPlayer player) {
         if (client.gameMode == null) {
-            LOGGER.warn("Cannot refill slot: gameMode is null");
             return;
         }
 
         if (!player.inventoryMenu.getCarried().isEmpty()) {
-            LOGGER.warn("Cannot refill slot: cursor is not empty");
             return;
         }
 
@@ -797,7 +788,6 @@ public class ScriptExecutor {
                     if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedTool) {
                         // Found expected tool, swap it in
                         swapInventorySlots(client, player, currentSlot, i);
-                        LOGGER.info("Auto-restored {} to slot {} from slot {}", expectedTool, currentSlot, i);
                         currentItem = inventory.getItem(currentSlot);
                         break;
                     }
@@ -832,10 +822,6 @@ public class ScriptExecutor {
 
                     if (bestSlot >= 0) {
                         swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
-                        if (swapped) {
-                            LOGGER.info("Auto-replaced tool in slot {} with slot {} (durability: {} -> {}, threshold: {})",
-                                currentSlot, bestSlot, remainingDurability, bestDurability, threshold);
-                        }
                     }
 
                     // If no replacement found and tool is broken (0 durability), move it to empty slot
@@ -843,9 +829,7 @@ public class ScriptExecutor {
                         for (int i = 9; i < 36; i++) {
                             ItemStack slotItem = inventory.getItem(i);
                             if (slotItem.isEmpty()) {
-                                if (swapInventorySlots(client, player, currentSlot, i)) {
-                                    LOGGER.info("Moved broken tool from slot {} to empty inventory slot {}", currentSlot, i);
-                                }
+                                swapInventorySlots(client, player, currentSlot, i);
                                 break;
                             }
                         }
@@ -853,7 +837,6 @@ public class ScriptExecutor {
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to auto-replace tool", e);
         }
     }
 
@@ -885,7 +868,6 @@ public class ScriptExecutor {
                     if (!candidateItem.isEmpty() && candidateItem.getItem() == expectedWeapon) {
                         // Found expected weapon, swap it in (server-synced)
                         swapInventorySlots(client, player, currentSlot, i);
-                        LOGGER.info("Restored weapon {} to slot {} from slot {}", expectedWeapon, currentSlot, i);
                         currentItem = inventory.getItem(currentSlot); // Update reference
                         break;
                     }
@@ -924,10 +906,6 @@ public class ScriptExecutor {
 
                     if (bestSlot >= 0) {
                         swapped = swapInventorySlots(client, player, currentSlot, bestSlot);
-                        if (swapped) {
-                            LOGGER.info("Auto-swapped weapon in slot {} with slot {} (durability: {} -> {})",
-                                currentSlot, bestSlot, remainingDurability, bestDurability);
-                        }
                     }
 
                     // If no replacement found, move current weapon to empty slot
@@ -936,9 +914,7 @@ public class ScriptExecutor {
                             ItemStack slotItem = inventory.getItem(i);
                             if (slotItem.isEmpty()) {
                                 // Move broken weapon to empty slot (server-synced)
-                                if (swapInventorySlots(client, player, currentSlot, i)) {
-                                    LOGGER.info("Moved broken weapon from slot {} to empty inventory slot {}", currentSlot, i);
-                                }
+                                swapInventorySlots(client, player, currentSlot, i);
                                 break;
                             }
                         }
@@ -946,7 +922,6 @@ public class ScriptExecutor {
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to auto-swap weapon", e);
         }
     }
 
@@ -978,7 +953,6 @@ public class ScriptExecutor {
             if (player == null) return true;
 
             if (this.itemId == null) {
-                LOGGER.error("{} requires a full item id like minecraft:emerald; got '{}'", mode, itemIdText);
                 return true;
             }
 
@@ -994,12 +968,10 @@ public class ScriptExecutor {
                     if (!(client.screen instanceof MerchantScreen)) {
                         AbstractVillager villager = getPointedVillager(client);
                         if (villager == null) {
-                            LOGGER.error("{} requires pointing at a villager", mode);
                             yield true;
                         }
 
                         if (client.gameMode == null) {
-                            LOGGER.error("Cannot {}: gameMode is null", mode);
                             yield true;
                         }
 
@@ -1029,7 +1001,6 @@ public class ScriptExecutor {
 
                     waitTicks += gameTicksPassed;
                     if (waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
-                        LOGGER.error("Timed out waiting for villager trade screen for {}", mode);
                         yield true;
                     }
 
@@ -1047,7 +1018,6 @@ public class ScriptExecutor {
                     if (offers.isEmpty()) {
                         waitTicks += gameTicksPassed;
                         if (waitTicks > MAX_WAIT_TICKS_FOR_SCREEN) {
-                            LOGGER.error("No villager offers available for {}", mode);
                             closeScreen(client, player);
                             yield true;
                         }
@@ -1056,7 +1026,6 @@ public class ScriptExecutor {
 
                     selectedOfferIndex = pickBestOfferIndex(player.getInventory(), offers, mode, itemId);
                     if (selectedOfferIndex < 0) {
-                        LOGGER.error("No matching offers found for {} '{}'", mode, itemId);
                         closeScreen(client, player);
                         yield true;
                     }
@@ -1104,7 +1073,6 @@ public class ScriptExecutor {
                         if (remainingAfterThisTrade <= 1) {
                             // Perform this final trade, then stop
                             if (!clearPaymentSlots(menu)) {
-                                LOGGER.error("Not enough inventory space to clear payment slots for {}", mode);
                                 closeScreen(client, player);
                                 yield true;
                             }
@@ -1120,7 +1088,6 @@ public class ScriptExecutor {
                     }
 
                     if (!clearPaymentSlots(menu)) {
-                        LOGGER.error("Not enough inventory space to clear payment slots for {}", mode);
                         closeScreen(client, player);
                         yield true;
                     }

@@ -1,8 +1,6 @@
 package ninja.trek.smartclicker.executor;
 
 import net.minecraft.client.Minecraft;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 
@@ -11,7 +9,6 @@ import java.lang.reflect.Method;
  * Handles freecam mode detection and camera rotation updates.
  */
 public class CraneshotCompatibility {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CraneshotCompatibility.class);
 
     private static Boolean craneshotAvailable = null;
     private static Class<?> cameraEntityClass = null;
@@ -34,10 +31,8 @@ public class CraneshotCompatibility {
                 updateRotationMethod = cameraSystemClass.getMethod("updateRotation", double.class, double.class, double.class);
 
                 craneshotAvailable = true;
-                LOGGER.info("Craneshot camera mod detected - compatibility enabled");
             } catch (ClassNotFoundException | NoSuchMethodException e) {
                 craneshotAvailable = false;
-                LOGGER.debug("Craneshot camera mod not detected - compatibility disabled");
             }
         }
         return craneshotAvailable;
@@ -55,7 +50,6 @@ public class CraneshotCompatibility {
             Object cameraEntity = getCameraMethod.invoke(null);
             return cameraEntity != null;
         } catch (Exception e) {
-            LOGGER.error("Failed to check freecam status", e);
             return false;
         }
     }
@@ -81,7 +75,6 @@ public class CraneshotCompatibility {
                 updateRotationMethod.invoke(cameraSystem, yawDelta * sensitivity, pitchDelta * sensitivity, 1.0);
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to update camera rotation", e);
         }
     }
 

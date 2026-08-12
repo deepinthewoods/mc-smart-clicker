@@ -1,6 +1,7 @@
 package ninja.trek.smartclicker.recording;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.inventory.MerchantMenu;
@@ -10,14 +11,11 @@ import ninja.trek.smartclicker.command.CommandInstruction;
 import ninja.trek.smartclicker.command.CommandType;
 import ninja.trek.smartclicker.mixin.client.InventoryAccessor;
 import ninja.trek.smartclicker.script.Script;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class RecordingManager {
-    private static final Logger LOGGER = LoggerFactory.getLogger(RecordingManager.class);
     private static final int HOLD_THRESHOLD_TICKS = 5; // 0.25 seconds
 
     private boolean recording = false;
@@ -26,24 +24,18 @@ public class RecordingManager {
     private long startTick = 0;
     private long lastCommandTick = 0;
 
-    // Track button states for hold detection
-    private boolean leftButtonDown = false;
-    private long leftButtonDownTick = 0;
-    private boolean rightButtonDown = false;
-    private long rightButtonDownTick = 0;
-
-    // Track movement key states
-    private boolean forwardKeyDown = false;
-    private long forwardKeyDownTick = 0;
-    private boolean backKeyDown = false;
-    private long backKeyDownTick = 0;
-    private boolean leftKeyDown = false;
-    private long leftKeyDownTick = 0;
-    private boolean rightKeyDown = false;
-    private long rightKeyDownTick = 0;
+    // Active action system — at most one duration-based action at a time
+    private enum ActiveAction {
+        NONE, MOVE_W, MOVE_S, MOVE_A, MOVE_D, LEFT_MOUSE, RIGHT_MOUSE
+    }
+    private ActiveAction activeAction = ActiveAction.NONE;
+    private long activeActionStartTick = 0;
 
     // Track crouch state
     private boolean crouchKeyDown = false;
+
+    // Track drop key state
+    private boolean dropKeyWasDown = false;
 
     // Track hotbar slot
     private int lastHotbarSlot = -1;
@@ -60,7 +52,6 @@ public class RecordingManager {
 
     public void startRecording(Script script, boolean recordMouseMovements) {
         if (script == null) {
-            LOGGER.error("Cannot start recording with null script");
             return;
         }
 
@@ -71,13 +62,10 @@ public class RecordingManager {
         this.lastCommandTick = this.startTick;
 
         // Reset all state
-        this.leftButtonDown = false;
-        this.rightButtonDown = false;
-        this.forwardKeyDown = false;
-        this.backKeyDown = false;
-        this.leftKeyDown = false;
-        this.rightKeyDown = false;
+        this.activeAction = ActiveAction.NONE;
+        this.activeActionStartTick = 0;
         this.crouchKeyDown = false;
+        this.dropKeyWasDown = false;
         this.lastHotbarSlot = -1;
         this.lastTradeUses.clear();
 
@@ -91,31 +79,16 @@ public class RecordingManager {
             this.lastSavedPitch = client.player.getXRot();
         }
 
-        LOGGER.info("Started recording for script: {} (Record Mouse: {})", script.getName(), recordMouseMovements);
     }
 
     public void stopRecording() {
         if (!recording) return;
 
-        // Release any held keys before stopping
-        Minecraft client = Minecraft.getInstance();
         long currentTick = getCurrentTick();
 
-        if (forwardKeyDown) {
-            addMoveCommand("w", forwardKeyDownTick, currentTick);
-            forwardKeyDown = false;
-        }
-        if (backKeyDown) {
-            addMoveCommand("s", backKeyDownTick, currentTick);
-            backKeyDown = false;
-        }
-        if (leftKeyDown) {
-            addMoveCommand("a", leftKeyDownTick, currentTick);
-            leftKeyDown = false;
-        }
-        if (rightKeyDown) {
-            addMoveCommand("d", rightKeyDownTick, currentTick);
-            rightKeyDown = false;
+        // Finalize active action if any
+        if (activeAction != ActiveAction.NONE) {
+            finalizeActiveAction(currentTick);
         }
 
         // Save any pending mouse position before stopping
@@ -125,8 +98,6 @@ public class RecordingManager {
         for (CommandInstruction instruction : recordedCommands) {
             targetScript.addInstruction(instruction);
         }
-
-        LOGGER.info("Stopped recording. Added {} commands to script: {}", recordedCommands.size(), targetScript.getName());
 
         this.recording = false;
         this.targetScript = null;
@@ -144,16 +115,24 @@ public class RecordingManager {
     public void tick(Minecraft client) {
         if (!recording || client.player == null) return;
 
-        // Stop recording if player opens a screen (ESC/menu)
-        if (client.screen != null) {
-            LOGGER.info("Screen detected, stopping recording");
+        // Stop recording if player opens the pause screen (ESC)
+        if (client.screen instanceof PauseScreen) {
             stopRecording();
+            return;
+        }
+
+        // Skip action recording while any other screen is open (inventory, etc.)
+        // Recording stays active so the mixin can detect inventory throws
+        if (client.screen != null) {
             return;
         }
 
         long currentTick = getCurrentTick();
 
-        // Handle mouse movement recording
+        // 1. Block concurrent actions — force non-active keys to false
+        blockConcurrentActions(client);
+
+        // 2. Handle mouse movement recording (isPlayerStationary sees correct state)
         if (recordMouseMovements) {
             float currentYaw = client.player.getYRot();
             float currentPitch = client.player.getXRot();
@@ -184,67 +163,89 @@ public class RecordingManager {
             }
         }
 
-        // Record left mouse button
+        // 3. Record left mouse button (respects active action)
         recordLeftMouse(client, currentTick);
 
-        // Record right mouse button
+        // 4. Record right mouse button (respects active action)
         recordRightMouse(client, currentTick);
 
-        // Record jump
+        // 5. Record jump (passive — always allowed)
         recordJump(client, currentTick);
 
-        // Record crouch toggle
+        // 6. Record crouch toggle (passive — always allowed)
         recordCrouch(client, currentTick);
 
-        // Record movement keys
+        // 7. Record movement keys (respects active action)
         recordMovement(client, currentTick);
 
-        // Record hotbar changes
+        // 8. Record hotbar changes (passive — always allowed)
         recordHotbarChange(client, currentTick);
 
-        // Record villager trades
+        // 9. Record drop item (passive — Q key edge detection)
+        recordDropItem(client, currentTick);
+
+        // 10. Record villager trades (passive — always allowed)
         recordTrades(client, currentTick);
+    }
+
+    /**
+     * Forces all non-active action keys to setDown(false) each tick,
+     * preventing both the game action and recording for blocked keys.
+     */
+    private void blockConcurrentActions(Minecraft client) {
+        if (activeAction == ActiveAction.NONE) return;
+
+        // Block all active-action keys except the current active one
+        if (activeAction != ActiveAction.MOVE_W) {
+            client.options.keyUp.setDown(false);
+        }
+        if (activeAction != ActiveAction.MOVE_S) {
+            client.options.keyDown.setDown(false);
+        }
+        if (activeAction != ActiveAction.MOVE_A) {
+            client.options.keyLeft.setDown(false);
+        }
+        if (activeAction != ActiveAction.MOVE_D) {
+            client.options.keyRight.setDown(false);
+        }
+        if (activeAction != ActiveAction.LEFT_MOUSE) {
+            client.options.keyAttack.setDown(false);
+        }
+        if (activeAction != ActiveAction.RIGHT_MOUSE) {
+            client.options.keyUse.setDown(false);
+        }
     }
 
     private void recordLeftMouse(Minecraft client, long currentTick) {
         boolean isDown = client.options.keyAttack.isDown();
 
-        if (isDown && !leftButtonDown) {
-            // Button just pressed
-            leftButtonDown = true;
-            leftButtonDownTick = currentTick;
-        } else if (!isDown && leftButtonDown) {
-            // Button just released
-            long holdDuration = currentTick - leftButtonDownTick;
-            if (holdDuration >= HOLD_THRESHOLD_TICKS) {
-                // It was a hold
-                addCommand(CommandType.LEFT_HOLD, "", (int) holdDuration);
-            } else {
-                // It was a click
-                addCommand(CommandType.LEFT_CLICK, "", 1);
+        if (activeAction == ActiveAction.LEFT_MOUSE) {
+            // We own the active action — check for release
+            if (!isDown) {
+                finalizeActiveAction(currentTick);
+                checkNextActiveAction(client, currentTick);
             }
-            leftButtonDown = false;
+        } else if (activeAction == ActiveAction.NONE && isDown) {
+            // No active action and button just pressed — claim it
+            activeAction = ActiveAction.LEFT_MOUSE;
+            activeActionStartTick = currentTick;
         }
+        // Otherwise: another action is active, button is blocked by blockConcurrentActions
     }
 
     private void recordRightMouse(Minecraft client, long currentTick) {
         boolean isDown = client.options.keyUse.isDown();
 
-        if (isDown && !rightButtonDown) {
-            // Button just pressed
-            rightButtonDown = true;
-            rightButtonDownTick = currentTick;
-        } else if (!isDown && rightButtonDown) {
-            // Button just released
-            long holdDuration = currentTick - rightButtonDownTick;
-            if (holdDuration >= HOLD_THRESHOLD_TICKS) {
-                // It was a hold
-                addCommand(CommandType.RIGHT_HOLD, "", (int) holdDuration);
-            } else {
-                // It was a click
-                addCommand(CommandType.RIGHT_CLICK, "", 1);
+        if (activeAction == ActiveAction.RIGHT_MOUSE) {
+            // We own the active action — check for release
+            if (!isDown) {
+                finalizeActiveAction(currentTick);
+                checkNextActiveAction(client, currentTick);
             }
-            rightButtonDown = false;
+        } else if (activeAction == ActiveAction.NONE && isDown) {
+            // No active action and button just pressed — claim it
+            activeAction = ActiveAction.RIGHT_MOUSE;
+            activeActionStartTick = currentTick;
         }
     }
 
@@ -266,45 +267,99 @@ public class RecordingManager {
     }
 
     private void recordMovement(Minecraft client, long currentTick) {
-        // Forward (W)
-        boolean forwardDown = client.options.keyUp.isDown();
-        if (forwardDown && !forwardKeyDown) {
-            forwardKeyDown = true;
-            forwardKeyDownTick = currentTick;
-        } else if (!forwardDown && forwardKeyDown) {
-            addMoveCommand("w", forwardKeyDownTick, currentTick);
-            forwardKeyDown = false;
-        }
+        if (activeAction == ActiveAction.MOVE_W || activeAction == ActiveAction.MOVE_S
+                || activeAction == ActiveAction.MOVE_A || activeAction == ActiveAction.MOVE_D) {
+            // We own the active action — check if the active key was released
+            boolean activeKeyStillDown = switch (activeAction) {
+                case MOVE_W -> client.options.keyUp.isDown();
+                case MOVE_S -> client.options.keyDown.isDown();
+                case MOVE_A -> client.options.keyLeft.isDown();
+                case MOVE_D -> client.options.keyRight.isDown();
+                default -> false;
+            };
 
-        // Back (S)
-        boolean backDown = client.options.keyDown.isDown();
-        if (backDown && !backKeyDown) {
-            backKeyDown = true;
-            backKeyDownTick = currentTick;
-        } else if (!backDown && backKeyDown) {
-            addMoveCommand("s", backKeyDownTick, currentTick);
-            backKeyDown = false;
+            if (!activeKeyStillDown) {
+                finalizeActiveAction(currentTick);
+                checkNextActiveAction(client, currentTick);
+            }
+        } else if (activeAction == ActiveAction.NONE) {
+            // No active action — check if any movement key is pressed (priority: W > S > A > D)
+            if (client.options.keyUp.isDown()) {
+                activeAction = ActiveAction.MOVE_W;
+                activeActionStartTick = currentTick;
+            } else if (client.options.keyDown.isDown()) {
+                activeAction = ActiveAction.MOVE_S;
+                activeActionStartTick = currentTick;
+            } else if (client.options.keyLeft.isDown()) {
+                activeAction = ActiveAction.MOVE_A;
+                activeActionStartTick = currentTick;
+            } else if (client.options.keyRight.isDown()) {
+                activeAction = ActiveAction.MOVE_D;
+                activeActionStartTick = currentTick;
+            }
         }
+        // Otherwise: another action type is active, keys are blocked by blockConcurrentActions
+    }
 
-        // Left (A)
-        boolean leftDown = client.options.keyLeft.isDown();
-        if (leftDown && !leftKeyDown) {
-            leftKeyDown = true;
-            leftKeyDownTick = currentTick;
-        } else if (!leftDown && leftKeyDown) {
-            addMoveCommand("a", leftKeyDownTick, currentTick);
-            leftKeyDown = false;
+    /**
+     * Records the command for the current active action and resets to NONE.
+     */
+    private void finalizeActiveAction(long currentTick) {
+        switch (activeAction) {
+            case MOVE_W -> addMoveCommand("w", activeActionStartTick, currentTick);
+            case MOVE_S -> addMoveCommand("s", activeActionStartTick, currentTick);
+            case MOVE_A -> addMoveCommand("a", activeActionStartTick, currentTick);
+            case MOVE_D -> addMoveCommand("d", activeActionStartTick, currentTick);
+            case LEFT_MOUSE -> {
+                long holdDuration = currentTick - activeActionStartTick;
+                if (holdDuration >= HOLD_THRESHOLD_TICKS) {
+                    addCommand(CommandType.LEFT_HOLD, "", (int) holdDuration);
+                } else {
+                    addCommand(CommandType.LEFT_CLICK, "", 1);
+                }
+            }
+            case RIGHT_MOUSE -> {
+                long holdDuration = currentTick - activeActionStartTick;
+                if (holdDuration >= HOLD_THRESHOLD_TICKS) {
+                    addCommand(CommandType.RIGHT_HOLD, "", (int) holdDuration);
+                } else {
+                    addCommand(CommandType.RIGHT_CLICK, "", 1);
+                }
+            }
+            case NONE -> {}
         }
+        activeAction = ActiveAction.NONE;
+    }
 
-        // Right (D)
-        boolean rightDown = client.options.keyRight.isDown();
-        if (rightDown && !rightKeyDown) {
-            rightKeyDown = true;
-            rightKeyDownTick = currentTick;
-        } else if (!rightDown && rightKeyDown) {
-            addMoveCommand("d", rightKeyDownTick, currentTick);
-            rightKeyDown = false;
-        }
+    /**
+     * After the active action is released, check if another active-action key is still
+     * physically held and auto-activate it. We must read the raw key state here since
+     * blockConcurrentActions already ran this tick and forced them to false — but the
+     * active action is now NONE, so next tick they won't be blocked.
+     *
+     * Priority: W > S > A > D > Left Mouse > Right Mouse
+     */
+    private void checkNextActiveAction(Minecraft client, long currentTick) {
+        // We need to peek at the real underlying key state. Since blockConcurrentActions
+        // already set these to false for this tick, we check KeyMapping directly.
+        // However, the physical key is still held, so on the next tick (before blocking)
+        // isDown() will return true again. We can set the active action now so that
+        // blockConcurrentActions on the next tick knows what to allow.
+        //
+        // For movement keys, the game re-evaluates isDown from the physical key state
+        // each tick, so even though we set them to false this tick, they'll be true
+        // next tick if still physically held. We need to check the physical state.
+        //
+        // We use a simple approach: since we just finalized, set activeAction = NONE.
+        // On the next tick, blockConcurrentActions sees NONE and doesn't block anything,
+        // so recordMovement/recordLeftMouse/recordRightMouse will pick up the next key
+        // naturally via their "activeAction == NONE && isDown" checks.
+        //
+        // This is correct because:
+        // - This tick: the just-released action is finalized
+        // - Next tick: no blocking happens (NONE), the first recorder to see a held key claims it
+        // The tick order (left mouse -> right mouse -> movement) determines implicit priority.
+        // That's fine — the one-tick gap where no action is active is imperceptible.
     }
 
     private void addMoveCommand(String direction, long startTick, long endTick) {
@@ -328,6 +383,27 @@ public class RecordingManager {
             addCommand(CommandType.BELT_SELECT, String.valueOf(currentSlot), 1);
             lastHotbarSlot = currentSlot;
         }
+    }
+
+    private void recordDropItem(Minecraft client, long currentTick) {
+        boolean isDown = client.options.keyDrop.isDown();
+        if (isDown && !dropKeyWasDown) {
+            // Rising edge — Q key just pressed
+            if (client.hasControlDown()) {
+                addCommand(CommandType.DROP_ITEM, "64", 1);
+            } else {
+                addCommand(CommandType.DROP_ITEM, "1", 1);
+            }
+        }
+        dropKeyWasDown = isDown;
+    }
+
+    /**
+     * Called by DropItemMixin when items are thrown from an inventory screen.
+     */
+    public void onInventoryThrow(boolean entireStack) {
+        if (!recording) return;
+        addCommand(CommandType.DROP_ITEM, entireStack ? "64" : "1", 1);
     }
 
     private void recordTrades(Minecraft client, long currentTick) {
@@ -371,7 +447,6 @@ public class RecordingManager {
         // The user can manually change it to SELL if needed
         addCommand(CommandType.BUY, resultItemId, 1);
 
-        LOGGER.info("Recorded trade: {}", resultItemId);
     }
 
     private void addCommand(CommandType type, String parameter, int delay) {
@@ -394,7 +469,6 @@ public class RecordingManager {
         recordedCommands.add(instruction);
         lastCommandTick = currentTick;
 
-        LOGGER.debug("Recorded command: {} {} (delay: {})", type.getDisplayName(), parameter, delay);
     }
 
     /**
@@ -448,7 +522,6 @@ public class RecordingManager {
         lastSavedPitch = currentPitch;
         mousePositionChanged = false;
 
-        LOGGER.debug("Saved mouse position: Yaw={}, Pitch={}", currentYaw, currentPitch);
     }
 
     private long getCurrentTick() {

@@ -17,11 +17,8 @@ import ninja.trek.smartclicker.script.ScriptManager;
 import ninja.trek.smartclicker.ui.ScriptMenuScreen;
 import ninja.trek.smartclicker.recording.RecordingManager;
 import org.lwjgl.glfw.GLFW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SmartClickerClient implements ClientModInitializer {
-	public static final Logger LOGGER = LoggerFactory.getLogger("SmartClicker");
 
 	private static final KeyMapping.Category KEY_CATEGORY =
 		KeyMapping.Category.register(Identifier.fromNamespaceAndPath(SmartClicker.MOD_ID, "main"));
@@ -34,8 +31,6 @@ public class SmartClickerClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
-		LOGGER.info("Initializing Smart Clicker Client");
-
 		// Initialize config
 		config = new Config(FabricLoader.getInstance().getConfigDir());
 
@@ -129,7 +124,6 @@ public class SmartClickerClient implements ClientModInitializer {
 			}
 		});
 
-		LOGGER.info("Smart Clicker Client initialized");
 	}
 
 	public static Config getConfig() {

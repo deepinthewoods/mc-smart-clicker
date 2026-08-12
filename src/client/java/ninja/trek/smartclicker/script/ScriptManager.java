@@ -2,8 +2,6 @@ package ninja.trek.smartclicker.script;
 
 import com.google.gson.*;
 import ninja.trek.smartclicker.command.CommandInstruction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ScriptManager {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ScriptManager.class);
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
             .registerTypeAdapter(CommandInstruction.class, new CommandInstruction.Serializer())
@@ -26,7 +23,6 @@ public class ScriptManager {
         try {
             Files.createDirectories(scriptsDir);
         } catch (IOException e) {
-            LOGGER.error("Failed to create scripts directory", e);
         }
         loadScripts();
     }
@@ -48,12 +44,9 @@ public class ScriptManager {
                                 scripts.add(script);
                             }
                         } catch (IOException e) {
-                            LOGGER.error("Failed to load script: " + path, e);
                         }
                     });
-            LOGGER.info("Loaded {} scripts", scripts.size());
         } catch (IOException e) {
-            LOGGER.error("Failed to list scripts directory", e);
         }
     }
 
@@ -66,9 +59,7 @@ public class ScriptManager {
             if (!scripts.contains(script)) {
                 scripts.add(script);
             }
-            LOGGER.info("Saved script: {}", script.getName());
         } catch (IOException e) {
-            LOGGER.error("Failed to save script: " + script.getName(), e);
         }
     }
 
@@ -77,9 +68,7 @@ public class ScriptManager {
             Path scriptPath = scriptsDir.resolve(script.getId() + ".json");
             Files.deleteIfExists(scriptPath);
             scripts.remove(script);
-            LOGGER.info("Deleted script: {}", script.getName());
         } catch (IOException e) {
-            LOGGER.error("Failed to delete script: " + script.getName(), e);
         }
     }
 
@@ -115,7 +104,6 @@ public class ScriptManager {
 
             return new Script(id, name, instructions);
         } catch (Exception e) {
-            LOGGER.error("Failed to deserialize script", e);
             return null;
         }
     }

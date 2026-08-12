@@ -17,6 +17,7 @@ public enum CommandType {
     TILT_ABSOLUTE("Tilt Absolute", true),
     SWAP_TOOL("swap tool <", true),
     REFILL_SLOT("Refill Slot", false),
+    DROP_ITEM("Drop Item", true),
     BUY("Buy", true),
     SELL("Sell", true);
 
@@ -45,6 +46,7 @@ public enum CommandType {
             case MOVE -> "w";
             case PAN_ABSOLUTE, TILT_ABSOLUTE -> "0.0";
             case SWAP_TOOL -> "10";
+            case DROP_ITEM -> "1";
             case BUY, SELL -> "minecraft:";
             default -> "";
         };
