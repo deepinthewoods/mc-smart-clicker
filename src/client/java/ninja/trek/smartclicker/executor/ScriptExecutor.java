@@ -8,10 +8,11 @@ import net.minecraft.network.protocol.game.ServerboundSelectTradePacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -689,9 +690,9 @@ public class ScriptExecutor {
         }
 
         int containerId = player.inventoryMenu.containerId;
-        client.gameMode.handleInventoryMouseClick(containerId, slotA, 0, ClickType.PICKUP, player);
-        client.gameMode.handleInventoryMouseClick(containerId, slotB, 0, ClickType.PICKUP, player);
-        client.gameMode.handleInventoryMouseClick(containerId, slotA, 0, ClickType.PICKUP, player);
+        client.gameMode.handleContainerInput(containerId, slotA, 0, ContainerInput.PICKUP, player);
+        client.gameMode.handleContainerInput(containerId, slotB, 0, ContainerInput.PICKUP, player);
+        client.gameMode.handleContainerInput(containerId, slotA, 0, ContainerInput.PICKUP, player);
         return true;
     }
 
@@ -742,10 +743,10 @@ public class ScriptExecutor {
             int sourceMenuSlot = toMenuSlotIndex(i);
             if (sourceMenuSlot < 0) continue;
 
-            client.gameMode.handleInventoryMouseClick(containerId, sourceMenuSlot, 0, ClickType.PICKUP, player);
-            client.gameMode.handleInventoryMouseClick(containerId, targetMenuSlot, 0, ClickType.PICKUP, player);
+            client.gameMode.handleContainerInput(containerId, sourceMenuSlot, 0, ContainerInput.PICKUP, player);
+            client.gameMode.handleContainerInput(containerId, targetMenuSlot, 0, ContainerInput.PICKUP, player);
             if (!player.inventoryMenu.getCarried().isEmpty()) {
-                client.gameMode.handleInventoryMouseClick(containerId, sourceMenuSlot, 0, ClickType.PICKUP, player);
+                client.gameMode.handleContainerInput(containerId, sourceMenuSlot, 0, ContainerInput.PICKUP, player);
             }
 
             ItemStack updatedTarget = inventory.getItem(selectedSlot);
@@ -965,7 +966,7 @@ public class ScriptExecutor {
 
             return switch (stage) {
                 case 0 -> {
-                    if (!(client.screen instanceof MerchantScreen)) {
+                    if (!(client.gui.screen() instanceof MerchantScreen)) {
                         AbstractVillager villager = getPointedVillager(client);
                         if (villager == null) {
                             yield true;
@@ -975,7 +976,8 @@ public class ScriptExecutor {
                             yield true;
                         }
 
-                        InteractionResult result = client.gameMode.interact(player, villager, InteractionHand.MAIN_HAND);
+                        InteractionResult result = client.gameMode.interact(
+                                player, villager, new EntityHitResult(villager), InteractionHand.MAIN_HAND);
                         player.swing(InteractionHand.MAIN_HAND);
                         if (result.consumesAction()) {
                             stage = 1;
@@ -994,7 +996,7 @@ public class ScriptExecutor {
                     yield false;
                 }
                 case 1 -> {
-                    if (client.screen instanceof MerchantScreen && player.containerMenu instanceof MerchantMenu) {
+                    if (client.gui.screen() instanceof MerchantScreen && player.containerMenu instanceof MerchantMenu) {
                         stage = 2;
                         yield false;
                     }
@@ -1079,7 +1081,7 @@ public class ScriptExecutor {
                             selectOffer(client, menu, selectedOfferIndex);
                             if (fillPaymentSlotsExact(menu, offer) && offer.satisfiedBy(menu.getSlot(0).getItem(), menu.getSlot(1).getItem())) {
                                 if (client.gameMode != null) {
-                                    client.gameMode.handleInventoryMouseClick(menu.containerId, 2, 0, ClickType.QUICK_MOVE, player);
+                                    client.gameMode.handleContainerInput(menu.containerId, 2, 0, ContainerInput.QUICK_MOVE, player);
                                 }
                             }
                             closeScreen(client, player);
@@ -1106,7 +1108,7 @@ public class ScriptExecutor {
                     }
 
                     if (client.gameMode != null) {
-                        client.gameMode.handleInventoryMouseClick(menu.containerId, 2, 0, ClickType.QUICK_MOVE, player);
+                        client.gameMode.handleContainerInput(menu.containerId, 2, 0, ContainerInput.QUICK_MOVE, player);
                     }
                     tradesCompleted++;
 
@@ -1135,8 +1137,8 @@ public class ScriptExecutor {
 
         private static void closeScreen(Minecraft client, LocalPlayer player) {
             player.closeContainer();
-            if (client.screen != null) {
-                client.setScreen(null);
+            if (client.gui.screen() != null) {
+                client.gui.setScreen(null);
             }
         }
 

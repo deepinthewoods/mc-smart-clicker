@@ -116,14 +116,14 @@ public class RecordingManager {
         if (!recording || client.player == null) return;
 
         // Stop recording if player opens the pause screen (ESC)
-        if (client.screen instanceof PauseScreen) {
+        if (client.gui.screen() instanceof PauseScreen) {
             stopRecording();
             return;
         }
 
         // Skip action recording while any other screen is open (inventory, etc.)
         // Recording stays active so the mixin can detect inventory throws
-        if (client.screen != null) {
+        if (client.gui.screen() != null) {
             return;
         }
 
@@ -407,7 +407,7 @@ public class RecordingManager {
     }
 
     private void recordTrades(Minecraft client, long currentTick) {
-        if (!(client.screen instanceof MerchantScreen)) {
+        if (!(client.gui.screen() instanceof MerchantScreen)) {
             lastTradeUses.clear();
             return;
         }

@@ -1,6 +1,6 @@
 package ninja.trek.smartclicker.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
@@ -48,7 +48,7 @@ public class ScriptMenuScreen extends Screen {
             Script newScript = new Script("New Script");
             SmartClickerClient.getScriptManager().saveScript(newScript);
             if (minecraft != null) {
-                minecraft.setScreen(new ScriptEditorScreen(this, newScript));
+                minecraft.gui.setScreen(new ScriptEditorScreen(this, newScript));
             }
         }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
     }
@@ -88,23 +88,23 @@ public class ScriptMenuScreen extends Screen {
             Script newScript = new Script("New Script");
             SmartClickerClient.getScriptManager().saveScript(newScript);
             if (minecraft != null) {
-                minecraft.setScreen(new ScriptEditorScreen(this, newScript));
+                minecraft.gui.setScreen(new ScriptEditorScreen(this, newScript));
             }
         }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        super.render(graphics, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         // Draw title
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.centeredText(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
     }
 
     @Override
     public void onClose() {
         if (minecraft != null) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }
     }
 
@@ -131,14 +131,14 @@ public class ScriptMenuScreen extends Screen {
             // Edit button
             this.editButton = Button.builder(Component.literal("Edit"), button -> {
                 if (minecraft != null) {
-                    minecraft.setScreen(new ScriptEditorScreen(ScriptMenuScreen.this, script));
+                    minecraft.gui.setScreen(new ScriptEditorScreen(ScriptMenuScreen.this, script));
                 }
             }).bounds(centerX + 105, y, 45, BUTTON_HEIGHT).build();
 
             // Delete button
             this.deleteButton = Button.builder(Component.literal("Delete"), button -> {
                 if (minecraft != null) {
-                    minecraft.setScreen(new ConfirmationDialog(
+                    minecraft.gui.setScreen(new ConfirmationDialog(
                         ScriptMenuScreen.this,
                         "Delete script '" + script.getName() + "'?",
                         () -> {

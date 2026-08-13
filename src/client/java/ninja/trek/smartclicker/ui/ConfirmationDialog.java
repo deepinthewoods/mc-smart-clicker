@@ -1,6 +1,6 @@
 package ninja.trek.smartclicker.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
@@ -37,7 +37,7 @@ public class ConfirmationDialog extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // Render dark overlay background
         graphics.fill(0, 0, this.width, this.height, 0xC0000000);
 
@@ -52,16 +52,16 @@ public class ConfirmationDialog extends Screen {
         graphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFFFFFFFF);
         graphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFFFFFFFF);
 
-        super.render(graphics, mouseX, mouseY, delta);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         // Draw message
-        graphics.drawCenteredString(this.font, message, this.width / 2, this.height / 2 - 20, 0xFFFFFF);
+        graphics.centeredText(this.font, message, this.width / 2, this.height / 2 - 20, 0xFFFFFF);
     }
 
     @Override
     public void onClose() {
         if (minecraft != null) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }
     }
 

@@ -1,6 +1,6 @@
 package ninja.trek.smartclicker.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -94,7 +94,6 @@ public class ScriptEditorScreen extends Screen {
         // Replace Tools threshold field
         this.replaceToolsThresholdField = new EditBox(this.font, this.width / 2 + 247, 35, 35, 16, Component.literal("Threshold"));
         this.replaceToolsThresholdField.setMaxLength(3);
-        this.replaceToolsThresholdField.setFilter(text -> text.isEmpty() || text.chars().allMatch(Character::isDigit));
         this.replaceToolsThresholdField.setValue(Integer.toString(script.getReplaceToolsThreshold()));
         this.replaceToolsThresholdField.setResponder(text -> {
             int threshold = text == null || text.isEmpty() ? 0 : Integer.parseInt(text);
@@ -202,10 +201,10 @@ public class ScriptEditorScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // Render a simple semi-transparent background without blur to avoid the "Can only blur once per frame" error
         graphics.fill(0, 0, this.width, this.height, 0xC0101010);
-        super.render(graphics, mouseX, mouseY, delta);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
     @Override
@@ -225,7 +224,7 @@ public class ScriptEditorScreen extends Screen {
     public void onClose() {
         SmartClickerClient.getScriptManager().saveScript(script);
         if (minecraft != null) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }
     }
 
@@ -347,7 +346,6 @@ public class ScriptEditorScreen extends Screen {
 
                 this.amountField = new EditBox(ScriptEditorScreen.this.font, x, y + 2, 40, 16, Component.literal("Amt"));
                 this.amountField.setMaxLength(4);
-                this.amountField.setFilter(text -> text.isEmpty() || text.chars().allMatch(Character::isDigit));
                 this.amountField.setValue(Integer.toString(instruction.getAmount()));
                 this.amountField.setResponder(text -> {
                     int amount = text == null || text.isEmpty() ? 0 : Integer.parseInt(text);
@@ -371,7 +369,7 @@ public class ScriptEditorScreen extends Screen {
 
             // Set delay button
             this.setDelayButton = Button.builder(Component.literal("Set"), button -> {
-                minecraft.setScreen(new SetDelayDialog(ScriptEditorScreen.this, instruction.getPostDelay(), newDelay -> {
+                minecraft.gui.setScreen(new SetDelayDialog(ScriptEditorScreen.this, instruction.getPostDelay(), newDelay -> {
                     instruction.setPostDelay(newDelay);
                     SmartClickerClient.getScriptManager().saveScript(script);
                     // Update the slider to reflect the new value

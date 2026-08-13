@@ -1,6 +1,6 @@
 package ninja.trek.smartclicker.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -40,20 +40,20 @@ public class SetDelayDialog extends Screen {
             errorMessage = null;
             validateInput(s);
         });
-        this.addWidget(this.delayInput);
+        this.addRenderableWidget(this.delayInput);
         this.setInitialFocus(this.delayInput);
 
         // Confirm button
         this.confirmButton = Button.builder(Component.literal("Confirm"), button -> {
             if (validateAndApply()) {
-                minecraft.setScreen(parent);
+                minecraft.gui.setScreen(parent);
             }
         }).bounds(dialogX + 50, dialogY + 90, 90, 20).build();
         this.addRenderableWidget(confirmButton);
 
         // Cancel button
         this.addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }).bounds(dialogX + 160, dialogY + 90, 90, 20).build());
     }
 
@@ -91,7 +91,7 @@ public class SetDelayDialog extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         int dialogWidth = 300;
         int dialogHeight = 140;
         int dialogX = (this.width - dialogWidth) / 2;
@@ -110,21 +110,20 @@ public class SetDelayDialog extends Screen {
         graphics.fill(dialogX + dialogWidth - 1, dialogY, dialogX + dialogWidth, dialogY + dialogHeight, 0xFFFFFFFF);
 
         // Title
-        graphics.drawCenteredString(this.font, "Set Delay (ticks)", this.width / 2, dialogY + 15, 0xFFFFFFFF);
+        graphics.centeredText(this.font, "Set Delay (ticks)", this.width / 2, dialogY + 15, 0xFFFFFFFF);
 
         // Label
-        graphics.drawString(this.font, "Delay:", dialogX + 50, dialogY + 38, 0xFFFFFFFF);
+        graphics.text(this.font, "Delay:", dialogX + 50, dialogY + 38, 0xFFFFFFFF);
 
         // Error message
         if (errorMessage != null) {
-            graphics.drawCenteredString(this.font, errorMessage, this.width / 2, dialogY + 75, 0xFFFF5555);
+            graphics.centeredText(this.font, errorMessage, this.width / 2, dialogY + 75, 0xFFFF5555);
         }
 
         // Render input field
-        this.delayInput.render(graphics, mouseX, mouseY, partialTick);
 
         // Render buttons
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
@@ -132,13 +131,13 @@ public class SetDelayDialog extends Screen {
         // Enter key confirms
         if (keyEvent.key() == GLFW.GLFW_KEY_ENTER) {
             if (validateAndApply()) {
-                minecraft.setScreen(parent);
+                minecraft.gui.setScreen(parent);
                 return true;
             }
         }
         // Escape key cancels
         if (keyEvent.key() == GLFW.GLFW_KEY_ESCAPE) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
             return true;
         }
         return super.keyPressed(keyEvent);

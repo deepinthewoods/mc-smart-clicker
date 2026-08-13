@@ -3,8 +3,9 @@ package ninja.trek.smartclicker;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -44,7 +45,7 @@ public class SmartClickerClient implements ClientModInitializer {
 		recordingManager = new RecordingManager();
 
 		// Register keybinding for opening menu (default: M key)
-		menuKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		menuKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.smart-clicker.menu",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_M,
@@ -65,7 +66,7 @@ public class SmartClickerClient implements ClientModInitializer {
 						scriptManager.saveScript(targetScript);
 					}
 					// Open menu after stopping recording
-					client.setScreen(new ScriptMenuScreen(client.screen));
+					client.gui.setScreen(new ScriptMenuScreen(client.gui.screen()));
 				}
 			} else {
 				// Execute script tick
@@ -78,7 +79,7 @@ public class SmartClickerClient implements ClientModInitializer {
 						executor.stop();
 					} else {
 						// Open menu if not running
-						client.setScreen(new ScriptMenuScreen(client.screen));
+						client.gui.setScreen(new ScriptMenuScreen(client.gui.screen()));
 					}
 				}
 
@@ -92,11 +93,11 @@ public class SmartClickerClient implements ClientModInitializer {
 					}
 
 					// Check if inventory or pause screen is open
-					if (client.screen != null) {
-						if (client.screen instanceof PauseScreen) {
+					if (client.gui.screen() != null) {
+						if (client.gui.screen() instanceof PauseScreen) {
 							executor.stop();
 						}
-						String screenClass = client.screen.getClass().getSimpleName();
+						String screenClass = client.gui.screen().getClass().getSimpleName();
 						if (screenClass.contains("Inventory") || screenClass.contains("Container")) {
 							executor.stop();
 						}
@@ -106,7 +107,10 @@ public class SmartClickerClient implements ClientModInitializer {
 		});
 
 		// Register HUD render callback for recording indicator
-		HudRenderCallback.EVENT.register((drawContext, tickCounter) -> {
+		HudElementRegistry.attachElementAfter(
+			VanillaHudElements.OVERLAY_MESSAGE,
+			Identifier.fromNamespaceAndPath(SmartClicker.MOD_ID, "recording_indicator"),
+			(drawContext, tickCounter) -> {
 			if (recordingManager.isRecording()) {
 				Minecraft client = Minecraft.getInstance();
 				if (client.font != null) {
@@ -119,7 +123,7 @@ public class SmartClickerClient implements ClientModInitializer {
 					drawContext.fill(x - 5, y - 2, x + textWidth + 5, y + 12, 0xAA000000);
 
 					// Draw text in red
-					drawContext.drawString(client.font, text, x, y, 0xFF5555, true);
+					drawContext.text(client.font, text, x, y, 0xFF5555, true);
 				}
 			}
 		});
